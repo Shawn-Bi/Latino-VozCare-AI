@@ -18,7 +18,7 @@ export default function DemoPatientPreview({ packet, onBack }: { packet: Patient
     <section className="pv-card pv-status" role="note" style={{ marginTop: 16 }}>
       <span className="pv-dot" aria-hidden="true" />
       <div><h2>{es ? "Vista previa de demostración · Paciente ficticio" : "Demo preview · Fictional patient"}</h2>
-        <p>{es ? "Las llamadas están desactivadas en esta demostración. No se envía nada." : "Calls are turned off in this demo. Nothing is sent."}</p>
+        <p>{es ? "Las llamadas son reales y usan la información ficticia de María." : "Calls are real and use María's fictional information."}</p>
         <button type="button" className="button secondary" onClick={onBack}>{es ? "← Volver al espacio de demostración" : "← Back to demo workspace"}</button></div>
     </section>
     <div className="pv-intro"><p className="pv-greeting">{es ? `Hola, ${packet.firstName}.` : `Hello, ${packet.firstName}.`}</p><h1>{es ? "Tu información de seguimiento" : "Your follow-up information"}</h1></div>
