@@ -1,8 +1,16 @@
 # VozCare Base44 handoff
 
-Status: local synthetic-data implementation. No real login, SMS, phone call, map service, patient access control, or cross-device storage is connected.
+Status: Google sign-in, admin-approved care-team memberships (CareTeamMembership), and synthetic education drafts are implemented. Patient, Visit and EducationDraft are admin-only. SMS, phone calls, maps, patient links, and final approval are not connected.
 
-## Working local journey
+## Blocked: secure doctor-record operation
+
+Doctors cannot open patient records yet. Backend functions require the Builder plan or higher and this workspace does not have it, so no client-only fallback was built. `DOCTOR_RECORD_ACCESS.available` in `src/lib/record-access.ts` stays `false`, and the doctor record functions in `src/lib/vozcare-api.ts` refuse to run.
+
+When backend functions are available, one Base44 function must, on every request: derive the caller from request auth, never from the payload; require an approved CareTeamMembership for that user; require `Patient.assigned_doctor_id` to equal the caller; require the Visit and EducationDraft to belong to the requested patient; update a draft only when its stored revision equals the revision the editor loaded, then add one; and keep service-role credentials server-side. Then point `vozcare-api.ts` at that function and flip the flag. Final approval additionally needs the immutable ApprovedPacket backend described below.
+
+## Superseded local journey (domain logic only)
+
+The UI no longer exposes this flow. The pure functions behind it stay covered by `tests/workflow.test.ts`.
 
 1. Home → Doctor view → Continue as demo doctor.
 2. Select María, José, or Ana. Their records, drafts, appointments, links, sessions, and requests are independent.
@@ -94,8 +102,8 @@ Run the pure domain checks with Node 24:
 
 ```sh
 node --experimental-strip-types --test tests/workflow.test.ts
-pnpm exec tsc --noEmit
-pnpm build
+npx tsc --noEmit
+npm run build
 ```
 
 After connection, test two doctor accounts with separate patient assignments, two patients on separate devices, expired/revoked links, duplicate page opens, duplicate provider callbacks, call failure/retry, actual SMS delivery, and a live spoken request opening the right card. Local verification is not proof that these provider or access-control boundaries work in Base44.

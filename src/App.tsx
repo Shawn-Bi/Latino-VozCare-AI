@@ -1,11 +1,13 @@
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import { doctorTranslations } from "./doctor-translations";
 import EducationReview from "./EducationReview";
-import { initialEducation, editEducation, canApproveEducation, type EducationDraft } from "./education";
+import { initialEducation, editEducation, type EducationDraft } from "./education";
 import ApprovedCare from "./ApprovedCare";
 import { initialDemo, initialWorkspace, appointmentLabel, localAppointmentValue, appointmentInstant, type Patient, type Appointment, type DemoState, type Language, type Visit } from "./workflow";
 import { useAuth } from "./lib/AuthContext";
-import { loadAssignedPatients, loadPatientData, saveDraft, saveContactAndAppointment, approveDraft, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
+import { loadAssignedPatients, loadPatientData, saveDraft, saveContactAndAppointment, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
+import { DOCTOR_RECORD_ACCESS } from "./lib/record-access";
+import RecordsLocked from "./components/RecordsLocked";
 import UnavailableNotice from "./components/UnavailableNotice";
 import AdminPanel from "./components/AdminPanel";
 import { base44 } from "./api/base44Client";
@@ -105,7 +107,7 @@ function GlobalNav({ view, navigate, language, setLanguage, user, onSignOut }: {
 }
 
 export default function App() {
-  const { isAuthenticated, isLoadingAuth, user, authError } = useAuth();
+  const { isAuthenticated, isLoadingAuth, user, authError, isCareTeamApproved: isApproved, refreshMembership } = useAuth();
   const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "doctor" ? "doctor" : "home");
   const [language, setLanguage] = useState<Language>("en");
   const [toast, setToast] = useState("");
@@ -114,15 +116,17 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedData, setSelectedData] = useState<LoadedPatientData | null>(null);
   const [selectedError, setSelectedError] = useState("");
-  const [isLoadingData, setIsLoadingData] = useState(false);
   const [doctorTab, setDoctorTab] = useState<DoctorTab>("patients");
   const [draftSaveState, setDraftSaveState] = useState<SaveState>("idle");
   const [contactSaveState, setContactSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [approveState, setApproveState] = useState<SaveState>("idle");
   const [refreshKey, setRefreshKey] = useState(0);
+  // Each async save/reload belongs to the selection that started it. A new object means a different selection,
+  // so a late response for a previous patient is ignored instead of restoring that patient.
+  const selectionRef = useRef<{ id: string | null }>({ id: null });
+  const editVersion = useRef(0);
 
-  const isApproved = !!user?.care_team_approved;
   const isAdmin = user?.role === "admin";
+  const recordsOpen = isApproved && DOCTOR_RECORD_ACCESS.available;
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -130,85 +134,90 @@ export default function App() {
   }, [language]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 3500); return () => window.clearTimeout(timer); }, [toast]);
 
-  // Load assigned patients when entering doctor view as an approved doctor.
+  // Patient records load only when the doctor has an approved membership AND the secure backend operation exists.
   useEffect(() => {
-    if (view !== "doctor" || !isAuthenticated || !isApproved) return;
+    if (view !== "doctor" || !isAuthenticated || !recordsOpen) return;
     let cancelled = false;
     setPatientsError("");
     loadAssignedPatients()
       .then((list) => { if (!cancelled) setPatients(list); })
-      .catch((err) => { if (!cancelled) setPatientsError(err.message || "Could not load patients."); })
-      .finally(() => { if (cancelled) return; });
+      .catch((err) => { if (!cancelled) setPatientsError(err.message || "Could not load patients."); });
     return () => { cancelled = true; };
-  }, [view, isAuthenticated, isApproved, user?.id, refreshKey]);
+  }, [view, isAuthenticated, recordsOpen, user?.id, refreshKey]);
 
-  // Load selected patient's full data from server.
   useEffect(() => {
-    if (!selectedId) { setSelectedData(null); return; }
+    if (!selectedId || !recordsOpen) return;
     let cancelled = false;
-    setIsLoadingData(true); setSelectedError("");
     loadPatientData(selectedId)
-      .then((data) => { if (!cancelled) { setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle"); setApproveState("idle"); } })
-      .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); })
-      .finally(() => { if (!cancelled) setIsLoadingData(false); });
+      .then((data) => { if (!cancelled) { setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle"); } })
+      .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); });
     return () => { cancelled = true; };
-  }, [selectedId, refreshKey]);
+  }, [selectedId, recordsOpen, refreshKey]);
 
   const navigate = (next: View) => { setView(next); window.scrollTo({ top: 0 }); };
-  const handleSignOut = () => { base44.auth.logout("/"); setSelectedId(null); setPatients(null); };
+
+  const selectPatient = (id: string | null) => {
+    selectionRef.current = { id };
+    setSelectedData(null); setSelectedError(""); setDraftSaveState("idle"); setContactSaveState("idle");
+    setSelectedId(id);
+  };
+  const handleSignOut = () => { base44.auth.logout("/"); selectPatient(null); setPatients(null); };
 
   const setEducation: Dispatch<SetStateAction<EducationDraft>> = (value) => {
-    if (!selectedData) return;
-    const newDraft = typeof value === "function" ? value(selectedData.draft) : value;
-    setSelectedData({ ...selectedData, draft: newDraft });
-    setDraftSaveState("idle");
+    editVersion.current++;
+    setSelectedData((current) => current ? { ...current, draft: typeof value === "function" ? value(current.draft) : value } : current);
+    setDraftSaveState((state) => state === "saving" ? state : "idle");
   };
 
   const handleSaveDraft = async () => {
     if (!selectedData) return;
+    const selection = selectionRef.current;
+    const { draftId, serverRevision, draft } = selectedData;
+    const patientId = selectedData.patient.id;
+    const editsAtStart = editVersion.current;
     setDraftSaveState("saving");
     try {
-      const result = await saveDraft(selectedData.draftId, selectedData.serverRevision, selectedData.draft);
-      if (result.success) { setSelectedData({ ...selectedData, serverRevision: selectedData.draft.revision }); setDraftSaveState("saved"); }
-      else if (result.conflict) setDraftSaveState("conflict");
-      else setDraftSaveState("error");
-    } catch { setDraftSaveState("error"); }
+      const result = await saveDraft(draftId, serverRevision, draft);
+      if (selectionRef.current !== selection) return;
+      if (result.status === "conflict") { setDraftSaveState("conflict"); return; }
+      // Advance the revision and remember the stored drawing, but keep any edits made while the save was running.
+      setSelectedData((current) => current && current.patient.id === patientId ? {
+        ...current,
+        serverRevision: result.revision,
+        draft: { ...current.draft, revision: result.revision, drawing: draft.drawing && current.draft.drawing === draft.drawing ? { ...draft.drawing, fileUri: result.drawingFileUri } : current.draft.drawing },
+      } : current);
+      setDraftSaveState(editVersion.current === editsAtStart ? "saved" : "idle");
+    } catch {
+      if (selectionRef.current === selection) setDraftSaveState("error");
+    }
   };
 
   const handleSaveContact = async (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => {
     if (!selectedData) return;
+    const selection = selectionRef.current;
+    const patientId = selectedData.patient.id;
     setContactSaveState("saving");
     try {
-      await saveContactAndAppointment(selectedData.patient.id, selectedData.visitId, phone, address, appointment);
-      setSelectedData({ ...selectedData, patient: { ...selectedData.patient, phone, address }, visit: { ...selectedData.visit, appointment: { ...selectedData.visit.appointment, ...appointment } } });
+      await saveContactAndAppointment(patientId, selectedData.visitId, phone, address, appointment);
+      if (selectionRef.current !== selection) return;
+      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
       setContactSaveState("saved");
-    } catch { setContactSaveState("error"); }
-  };
-
-  const handleApprove = async () => {
-    if (!selectedData) return;
-    if (!canApproveEducation(selectedData.draft)) { setToast(language === "es" ? "Completa la revisión antes de aprobar." : "Complete the review before approving."); return; }
-    const problem = checkDeliveryProblem(selectedData.patient, selectedData.visit);
-    if (problem) { setToast(problem); return; }
-    setApproveState("saving");
-    try {
-      const now = new Date().toISOString();
-      const result = await approveDraft(selectedData.draftId, selectedData.serverRevision, selectedData.draft, now);
-      if (result.success) {
-        setSelectedData({ ...selectedData, draft: { ...selectedData.draft, approvedAt: now }, serverRevision: selectedData.draft.revision });
-        setApproveState("saved");
-        setToast(language === "es" ? "Paquete aprobado en el servidor." : "Packet approved on the server.");
-      } else if (result.conflict) setApproveState("conflict");
-      else setApproveState("error");
-    } catch { setApproveState("error"); }
+    } catch {
+      if (selectionRef.current === selection) setContactSaveState("error");
+    }
   };
 
   const handleReload = async () => {
-    if (!selectedId) return;
+    const selection = selectionRef.current;
+    if (!selection.id) return;
     try {
-      const data = await loadPatientData(selectedId);
-      setSelectedData(data); setDraftSaveState("idle"); setApproveState("idle");
-    } catch (err: any) { setSelectedError(err.message); }
+      const data = await loadPatientData(selection.id);
+      if (selectionRef.current !== selection) return;
+      editVersion.current++;
+      setSelectedData(data); setDraftSaveState("idle");
+    } catch {
+      if (selectionRef.current === selection) setToast(language === "es" ? "No se pudo recargar el borrador." : "Could not reload the draft.");
+    }
   };
 
   const handleProvisioned = () => { setRefreshKey((k) => k + 1); };
@@ -218,18 +227,17 @@ export default function App() {
     {view === "home" && <Home navigate={navigate} language={language} />}
     {view === "doctor" && (
       isLoadingAuth ? <main className="workspace"><div className="loading-state">Loading…</div></main>
-      : !isAuthenticated ? <DoctorSignIn language={language} onSignIn={() => base44.auth.loginWithProvider("google", window.location.pathname + window.location.search)} />
+      : !isAuthenticated ? <DoctorSignIn language={language} onSignIn={() => base44.auth.loginWithProvider("google", "/?view=doctor")} />
       : authError?.type === "user_not_registered" ? <PendingAccess language={language} onSignOut={handleSignOut} pending={false} />
-      : !isApproved ? <PendingAccess language={language} onSignOut={handleSignOut} pending={true} />
+      : !isApproved && !isAdmin ? <PendingAccess language={language} onSignOut={handleSignOut} pending={true} />
       : <DoctorView
           user={user!} onSignOut={handleSignOut}
           patients={patients} isLoadingPatients={patients === null} patientsError={patientsError}
-          selectedData={selectedData} isLoadingData={isLoadingData} selectedError={selectedError}
-          onSelectPatient={(id) => { setSelectedId(id); setDoctorTab("patients"); }} onBack={() => setSelectedId(null)}
+          selectedId={selectedId} selectedData={selectedData} selectedError={selectedError}
+          onSelectPatient={(id) => { selectPatient(id); setDoctorTab("patients"); }} onBack={() => selectPatient(null)}
           setEducation={setEducation} onSaveDraft={handleSaveDraft} draftSaveState={draftSaveState} onReload={handleReload}
           onSaveContact={handleSaveContact} contactSaveState={contactSaveState}
-          onApprove={handleApprove} approveState={approveState}
-          isAdmin={isAdmin} onProvisioned={handleProvisioned}
+          isAdmin={isAdmin} isApproved={isApproved} recordsOpen={recordsOpen} onProvisioned={handleProvisioned} onMembershipChanged={refreshMembership}
           tab={doctorTab} setTab={setDoctorTab} setToast={setToast} language={language}
         />
     )}
@@ -408,15 +416,14 @@ function FeaturePhone({ feature, language }: { feature: typeof homeFeatures[numb
   </div>;
 }
 
-function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedData, isLoadingData, selectedError, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, onApprove, approveState, isAdmin, onProvisioned, tab, setTab, setToast, language }: {
+function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedId, selectedData, selectedError, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, isAdmin, isApproved, recordsOpen, onProvisioned, onMembershipChanged, tab, setTab, setToast, language }: {
   user: { email: string; full_name: string | null; role: string }; onSignOut: () => void;
   patients: PatientListEntry[] | null; isLoadingPatients: boolean; patientsError: string;
-  selectedData: LoadedPatientData | null; isLoadingData: boolean; selectedError: string;
+  selectedId: string | null; selectedData: LoadedPatientData | null; selectedError: string;
   onSelectPatient: (id: string) => void; onBack: () => void;
   setEducation: Dispatch<SetStateAction<EducationDraft>>; onSaveDraft: () => void; draftSaveState: SaveState; onReload: () => void;
   onSaveContact: (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => void; contactSaveState: "idle" | "saving" | "saved" | "error";
-  onApprove: () => void; approveState: SaveState;
-  isAdmin: boolean; onProvisioned: () => void;
+  isAdmin: boolean; isApproved: boolean; recordsOpen: boolean; onProvisioned: () => void; onMembershipChanged: () => void;
   tab: DoctorTab; setTab: (tab: DoctorTab) => void; setToast: (value: string) => void; language: Language;
 }) {
   const es = language === "es";
@@ -424,11 +431,12 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
   const deliveryIssue = selectedData ? checkDeliveryProblem(selectedData.patient, selectedData.visit) : null;
 
   return <main className="workspace doctor-view">
-    <div className="workspace-heading"><div><PrototypeLabel /><p className="eyebrow">{es ? "ESPACIO DEL EQUIPO" : "CARE TEAM WORKSPACE"}</p><h1>{selectedData ? selectedData.patient.name : es ? "Mis pacientes" : "My patients"}</h1><p>{selectedData ? (es ? "Datos ficticios · Guardado en servidor" : "Fictional data · Saved to server") : (es ? "Elige un paciente para revisar su visita y su paquete educativo." : "Choose a patient to review their visit and education packet.")}</p></div><div className="doctor-account"><strong>{user.full_name || user.email}</strong><small>{es ? "Médico aprobado" : "Approved doctor"}</small><Button variant="quiet" onClick={onSignOut}>{es ? "Salir" : "Sign out"}</Button></div></div>
+    <div className="workspace-heading"><div><PrototypeLabel /><p className="eyebrow">{es ? "ESPACIO DEL EQUIPO" : "CARE TEAM WORKSPACE"}</p><h1>{selectedData ? selectedData.patient.name : es ? "Mis pacientes" : "My patients"}</h1><p>{selectedData ? (es ? "Datos ficticios · Edición de borrador" : "Fictional data · Draft editing") : (es ? "Elige un paciente para revisar su visita y su paquete educativo." : "Choose a patient to review their visit and education packet.")}</p></div><div className="doctor-account"><strong>{user.full_name || user.email}</strong><small>{isApproved ? (es ? "Médico aprobado" : "Approved doctor") : (es ? "Administrador · membresía médica sin aprobar" : "Admin · doctor membership not approved")}</small><Button variant="quiet" onClick={onSignOut}>{es ? "Salir" : "Sign out"}</Button></div></div>
 
-    {isAdmin && !selectedData && <AdminPanel onProvisioned={onProvisioned} />}
+    {isAdmin && !selectedId && <AdminPanel onProvisioned={onProvisioned} onMembershipChanged={onMembershipChanged} />}
 
-    {!selectedData ? <>
+    {!recordsOpen ? <RecordsLocked language={language} isApproved={isApproved} />
+    : !selectedId ? <>
       <section className="panel patient-list-panel">
         <div className="panel-heading"><h2>{es ? "Pacientes asignados" : "Assigned patients"}</h2><span>{patients?.length ?? 0}</span></div>
         {isLoadingPatients ? <div className="loading-state">{es ? "Cargando pacientes…" : "Loading patients…"}</div>
@@ -438,18 +446,18 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
           <div className="patient-table-head"><span>{es ? "Paciente" : "Patient"}</span><span>{es ? "Educación" : "Education"}</span><span>{es ? "Seguimiento" : "Follow-up"}</span><span>{es ? "Cita" : "Appointment"}</span></div>
           {patients.map((item) => <button type="button" className="patient-row patient-select" key={item.id} onClick={() => onSelectPatient(item.id)} aria-label={`${es ? "Abrir" : "Open"} ${item.name}`}>
             <span className="person"><i>{item.initials}</i><span><strong>{item.name}</strong><small>{item.preferredLanguage === "es" ? "Español preferido" : "English preferred"} · {es ? "Ficticio" : "Fictional"}</small></span></span>
-            <Badge tone={item.draftApproved ? "success" : "warning"}>{item.draftApproved ? (es ? "Aprobado" : "Approved") : (es ? "Necesita revisión" : "Needs review")}</Badge>
-            <span>{item.draftApproved ? (es ? "Paquete aprobado" : "Packet approved") : (es ? "Borrador" : "Draft")}</span>
+            <Badge tone="warning">{es ? "Necesita revisión" : "Needs review"}</Badge>
+            <span>{es ? "Borrador" : "Draft"}</span>
             <span>{item.appointmentStartsAt ? new Intl.DateTimeFormat(es ? "es-US" : "en-US", { month: "short", day: "numeric", timeZone: item.appointmentTimeZone }).format(new Date(item.appointmentStartsAt)) : "—"}<Icon name="chevron" size={16} /></span>
           </button>)}
         </>}
       </section>
     </> : <>
       <button type="button" className="back-to-patients" onClick={onBack}>← {es ? "Todos los pacientes" : "All patients"}</button>
-      <div className="patient-record-context"><span className="person"><i>{selectedData.patient.initials}</i><span><strong>{selectedData.patient.name}</strong><small>{selectedData.patient.phone} · {selectedData.patient.preferredLanguage === "es" ? "Español" : "English"}</small></span></span><span>{selectedData.patient.address || (es ? "Falta dirección" : "Address missing")}</span><Badge tone={selectedData.draft.approvedAt ? "success" : "warning"}>{selectedData.draft.approvedAt ? (es ? "Paquete aprobado" : "Packet approved") : (es ? "Borrador" : "Draft")}</Badge></div>
+      {selectedData && <div className="patient-record-context"><span className="person"><i>{selectedData.patient.initials}</i><span><strong>{selectedData.patient.name}</strong><small>{selectedData.patient.phone} · {selectedData.patient.preferredLanguage === "es" ? "Español" : "English"}</small></span></span><span>{selectedData.patient.address || (es ? "Falta dirección" : "Address missing")}</span><Badge tone="warning">{es ? "Borrador" : "Draft"}</Badge></div>}
 
       {selectedError ? <div className="loading-state" style={{ color: "var(--red)" }}>{selectedError}</div>
-      : isLoadingData ? <div className="loading-state">{es ? "Cargando datos del paciente…" : "Loading patient data…"}</div>
+      : !selectedData ? <div className="loading-state">{es ? "Cargando datos del paciente…" : "Loading patient data…"}</div>
       : <>
         <div className="doctor-tabs" role="tablist" aria-label={es ? "Registro del paciente" : "Patient record"} onKeyDown={(event) => { const index = tabs.findIndex((item) => item.id === tab); const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1; if (next < 0) return; event.preventDefault(); setTab(tabs[next].id); event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus(); }}>
           {tabs.map((item) => <button type="button" key={item.id} id={`doctor-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`doctor-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}
@@ -458,8 +466,8 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
           {tab === "patients" && <PatientOverview key={selectedData.patient.id} data={selectedData} onSaveContact={onSaveContact} contactSaveState={contactSaveState} review={() => setTab("care")} language={language} />}
           {tab === "care" && <>
             <p className="workspace-language-note">{es ? "Los controles de revisión están en inglés. El paquete del paciente está disponible en español e inglés." : "Review controls are in English. Patient packets are available in Spanish and English."}</p>
-            <section className="panel delivery-review"><h2>{es ? "Datos de entrega guardados" : "Saved delivery details"}</h2><p>{selectedData.patient.name} · {selectedData.patient.phone} · {selectedData.patient.address}</p><p>{appointmentLabel(selectedData.visit.appointment, language)} · {selectedData.visit.appointment.hospital}</p><p>{es ? "La aprobación marca el paquete en el servidor. La entrega por SMS y las llamadas no están conectadas." : "Approval marks the packet on the server. SMS delivery and calls are not connected."}</p>{deliveryIssue && <p role="alert">{deliveryIssue}</p>}</section>
-            <EducationReview key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onApprove={onApprove} deliveryProblem={deliveryIssue} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} />
+            <section className="panel delivery-review"><h2>{es ? "Datos de entrega guardados" : "Saved delivery details"}</h2><p>{selectedData.patient.name} · {selectedData.patient.phone} · {selectedData.patient.address}</p><p>{appointmentLabel(selectedData.visit.appointment, language)} · {selectedData.visit.appointment.hospital}</p><p>{es ? "La aprobación final y la entrega al paciente aún no están disponibles. El SMS y las llamadas no están conectados." : "Final approval and patient delivery are not available yet. SMS and calls are not connected."}</p>{deliveryIssue && <p role="alert">{deliveryIssue}</p>}</section>
+            <EducationReview key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} />
             <DeliveryPanel selectedData={selectedData} language={language} />
           </>}
           {tab === "session" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Seguimiento" : "Follow-up"}</h2></div></div><UnavailableNotice title={es ? "Llamadas y conversación no conectadas" : "Calls and conversation are not connected"} message={es ? "El servicio de llamadas y el agente de conversación no están configurados. No se realiza ninguna llamada ni se procesan eventos de conversación." : "The call service and conversation agent have not been configured. No calls are placed and no conversation events are processed."} /></section>}
@@ -520,22 +528,21 @@ function PatientOverview({ data, onSaveContact, contactSaveState, review, langua
       <p className="eyebrow">{es ? "EDUCACIÓN DE LA VISITA" : "VISIT EDUCATION"}</p>
       <h2>{es ? `Ayuda a ${data.patient.firstName} a entender su visita.` : `Help ${data.patient.firstName} understand their visit.`}</h2>
       <p>{data.patient.caseKind === "colon" ? (es ? "Colon sigmoide · Estadio pendiente" : "Sigmoid colon · Stage pending") : (es ? "Ejemplo de seguimiento · Sin diagnóstico registrado" : "Follow-up example · No diagnosis recorded")}</p>
-      <Badge tone={data.draft.approvedAt ? "success" : "warning"}>{data.draft.approvedAt ? (es ? "Aprobado" : "Approved") : (es ? "Necesita revisión" : "Needs review")}</Badge>
+      <Badge tone="warning">{es ? "Necesita revisión" : "Needs review"}</Badge>
       <Button onClick={review} icon="arrow">{es ? "Revisar paquete educativo" : "Review education draft"}</Button>
-      <p>{es ? "Revisa el contenido antes de aprobar el paquete." : "Review the content before approving the packet."}</p>
+      <p>{es ? "Revisa y guarda el borrador educativo. La aprobación final aún no está disponible." : "Review and save the education draft. Final approval is not available yet."}</p>
     </section>
   </div>;
 }
 
 function DeliveryPanel({ selectedData, language }: { selectedData: LoadedPatientData; language: Language }) {
   const es = language === "es";
-  const approved = !!selectedData.draft.approvedAt;
   return <section className="panel delivery-panel">
-    <div className="panel-heading"><div><h2>{es ? "Entrega y seguimiento" : "Delivery and follow-up"}</h2><p>{selectedData.patient.name} · {es ? "Paquete" : "Packet"} v{selectedData.draft.revision}</p></div>
-      <Badge tone={approved ? "success" : "warning"}>{approved ? (es ? "Aprobado" : "Approved") : (es ? "Borrador" : "Draft")}</Badge></div>
+    <div className="panel-heading"><div><h2>{es ? "Entrega y seguimiento" : "Delivery and follow-up"}</h2><p>{selectedData.patient.name} · {es ? "Revisión del borrador" : "Draft revision"} {selectedData.draft.revision}</p></div>
+      <Badge tone="warning">{es ? "Borrador" : "Draft"}</Badge></div>
     <UnavailableNotice
-      title={es ? "SMS y llamadas no conectados" : "SMS and calls are not connected"}
-      message={es ? "La entrega por SMS y el servicio de llamadas no están configurados. La aprobación marca el borrador en el servidor, pero no se envía ningún enlace ni se realiza ninguna llamada." : "The SMS delivery and call service have not been configured. Approval marks the draft on the server, but no link is sent and no call is placed."}
+      title={es ? "Aprobación final, enlaces, SMS y llamadas no disponibles" : "Final approval, patient links, SMS, and calls are unavailable"}
+      message={es ? "La aprobación final requiere el servicio de paquetes aprobados inmutables, que aún no existe. Los enlaces para pacientes, el SMS y las llamadas tampoco están conectados. Guardar un borrador revisado no envía nada ni crea ningún enlace." : "Final approval needs the immutable approved-packet backend, which has not been built. Patient links, SMS delivery, and the call service are also not connected. Saving a reviewed draft sends nothing and creates no link."}
     />
   </section>;
 }

@@ -9,7 +9,7 @@ export const modelViews: Record<ModelView, { label: string; description: string 
 };
 
 export type ResourceDecision = "pending" | "accepted" | "rejected";
-export type SavedDrawing = { image: string; view: ModelView };
+export type SavedDrawing = { image: string; view: ModelView; fileUri?: string };
 export type AnatomyPart = "abdomen" | "colon" | "sigmoid" | "smallIntestine" | "liver" | "lining" | "growth" | "wall";
 export type ModelPose = { position: [number, number, number]; target: [number, number, number] };
 export type AnatomyNote = { id: string; part: AnatomyPart; view: ModelView; text: string; pose: ModelPose };

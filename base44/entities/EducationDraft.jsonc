@@ -102,23 +102,20 @@
         "visual": false
       }
     },
-    "approved_at": {
+    "drawing_file_uri": {
       "type": "string",
-      "default": null
+      "default": ""
+    },
+    "drawing_view": {
+      "type": "string",
+      "default": ""
     }
   },
   "rls": {
     "read": {
-      "$or": [
-        {
-          "data.assigned_doctor_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "create": {
       "user_condition": {
@@ -126,16 +123,9 @@
       }
     },
     "update": {
-      "$or": [
-        {
-          "data.assigned_doctor_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
       "user_condition": {

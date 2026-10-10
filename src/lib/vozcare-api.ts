@@ -1,6 +1,19 @@
 import { base44 } from "@/api/base44Client";
-import { initialEducation, type EducationDraft } from "@/education";
+import { initialEducation, modelViews, type EducationDraft, type ModelView, type SavedDrawing } from "@/education";
 import type { Patient, Visit, Appointment, Language } from "@/workflow";
+import { DOCTOR_RECORD_ACCESS } from "@/lib/record-access";
+
+// Doctor record functions are blocked until the secure backend operation exists (see record-access.ts).
+// Patient, Visit and EducationDraft are admin-only, so these raw-entity calls must never be a doctor fallback.
+function assertRecordAccess() {
+  if (!DOCTOR_RECORD_ACCESS.available) throw new Error(DOCTOR_RECORD_ACCESS.reason);
+}
+
+// Defense in depth only. The data layer (admin-only RLS) is what actually refuses non-admins.
+async function requireAdmin() {
+  const me = await base44.auth.me();
+  if (me.role !== "admin") throw new Error("Only an admin can do this.");
+}
 
 // ─── Server entity shapes (snake_case as stored) ───────────────────────────
 
@@ -49,7 +62,8 @@ type ServerDraft = {
   resources: ("pending" | "accepted" | "rejected")[];
   anatomy_notes: any[];
   checks: { note: boolean; language: boolean; visual: boolean };
-  approved_at: string | null;
+  drawing_file_uri: string;
+  drawing_view: string;
 };
 
 // ─── Mappers (server snake_case → workflow camelCase) ──────────────────────
@@ -84,7 +98,25 @@ function mapVisit(v: ServerVisit): Visit {
   };
 }
 
-function mapDraft(d: ServerDraft): EducationDraft {
+// The drawing image lives in private file storage; the draft stores only its file URI and camera view.
+// If a stored drawing cannot be opened, fail the load. Returning null would let the next save erase it.
+async function loadDrawing(d: ServerDraft): Promise<SavedDrawing | null> {
+  if (!d.drawing_file_uri) return null;
+  if (!(d.drawing_view in modelViews)) throw new Error("The saved drawing has no valid camera view, so this draft was not opened.");
+  const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri: d.drawing_file_uri, expires_in: 3600 }) as { signed_url: string };
+  return { image: signed_url, view: d.drawing_view as ModelView, fileUri: d.drawing_file_uri };
+}
+
+async function persistDrawing(drawing: SavedDrawing | null): Promise<{ fileUri: string; view: string }> {
+  if (!drawing) return { fileUri: "", view: "" };
+  if (drawing.fileUri) return { fileUri: drawing.fileUri, view: drawing.view };
+  const blob = await (await fetch(drawing.image)).blob();
+  const file = new File([blob], `drawing-${crypto.randomUUID()}.png`, { type: blob.type || "image/png" });
+  const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file }) as { file_uri: string };
+  return { fileUri: file_uri, view: drawing.view };
+}
+
+async function mapDraft(d: ServerDraft): Promise<EducationDraft> {
   return {
     revision: d.revision,
     note: d.note ?? "",
@@ -97,14 +129,14 @@ function mapDraft(d: ServerDraft): EducationDraft {
     includeProcedure: d.include_procedure ?? false,
     deliveryLanguage: d.delivery_language ?? "es",
     resources: d.resources ?? [],
-    drawing: null, // drawing stays local-only; not persisted to server
+    drawing: await loadDrawing(d),
     anatomyNotes: d.anatomy_notes ?? [],
     checks: d.checks ?? { note: false, language: false, visual: false },
-    approvedAt: d.approved_at ?? null,
+    approvedAt: null, // Final approval needs the immutable ApprovedPacket backend, which does not exist yet.
   };
 }
 
-// ─── Public API ────────────────────────────────────────────────────────────
+// ─── Doctor record API (blocked until the backend operation exists) ────────
 
 export type PatientListEntry = {
   id: string;
@@ -114,7 +146,6 @@ export type PatientListEntry = {
   phone: string;
   caseKind: "colon" | "general";
   preferredLanguage: Language;
-  draftApproved: boolean;
   draftRevision: number;
   appointmentStartsAt: string;
   appointmentTimeZone: string;
@@ -129,15 +160,16 @@ export type LoadedPatientData = {
   serverRevision: number;
 };
 
-export type SaveResult = { success: boolean; conflict: boolean };
+export type SaveResult =
+  | { status: "saved"; revision: number; drawingFileUri: string }
+  | { status: "conflict" };
 
-// Load the patients assigned to the current doctor (RLS filters server-side).
 export async function loadAssignedPatients(): Promise<PatientListEntry[]> {
+  assertRecordAccess();
   const patients = await base44.entities.Patient.filter({}, { sort: "-created_date", limit: 50 }) as any;
   const patientItems = patients.items ?? patients;
   if (patientItems.length === 0) return [];
 
-  // Load the latest draft and visit for each patient in one batch each.
   const patientIds = patientItems.map((p: any) => p.id);
   const [visitsPage, draftsPage] = await Promise.all([
     base44.entities.Visit.filter({ patient_id: { $in: patientIds } }, { sort: "-created_date", limit: 200 }) as any,
@@ -157,7 +189,6 @@ export async function loadAssignedPatients(): Promise<PatientListEntry[]> {
       phone: p.phone,
       caseKind: p.case_kind,
       preferredLanguage: p.preferred_language,
-      draftApproved: !!d?.approved_at,
       draftRevision: d?.revision ?? 1,
       appointmentStartsAt: v?.appointment_starts_at ?? "",
       appointmentTimeZone: v?.appointment_time_zone ?? "America/New_York",
@@ -165,8 +196,8 @@ export async function loadAssignedPatients(): Promise<PatientListEntry[]> {
   });
 }
 
-// Load a single patient's full data (patient + visit + draft).
 export async function loadPatientData(patientId: string): Promise<LoadedPatientData> {
+  assertRecordAccess();
   const patient = await base44.entities.Patient.get(patientId) as ServerPatient;
   const visits = await base44.entities.Visit.filter({ patient_id: patientId }, { sort: "-created_date", limit: 1 }) as any;
   const visitItems = visits.items ?? visits;
@@ -181,79 +212,53 @@ export async function loadPatientData(patientId: string): Promise<LoadedPatientD
   return {
     patient: mapPatient(patient),
     visit: mapVisit(visit),
-    draft: mapDraft(draft),
+    draft: await mapDraft(draft),
     draftId: draft.id,
     visitId: visit.id,
     serverRevision: draft.revision,
   };
 }
 
-// Save draft with optimistic-concurrency revision check.
+// Every successful save advances the persisted revision by one, whatever changed (including checkboxes).
+// The update only applies if the stored revision still equals the one this editor loaded, so a stale
+// save reports a conflict instead of overwriting another editor. Saving never marks a draft approved.
 export async function saveDraft(draftId: string, serverRevision: number, draft: EducationDraft): Promise<SaveResult> {
-  const $set: Record<string, any> = {
-    note: draft.note,
-    english: draft.english,
-    spanish: draft.spanish,
-    plan_english: draft.planEnglish,
-    plan_spanish: draft.planSpanish,
-    caption_english: draft.captionEnglish,
-    caption_spanish: draft.captionSpanish,
-    include_procedure: draft.includeProcedure,
-    delivery_language: draft.deliveryLanguage,
-    resources: draft.resources,
-    anatomy_notes: draft.anatomyNotes,
-    checks: draft.checks,
-    approved_at: draft.approvedAt,
-    revision: draft.revision,
-  };
-  try {
-    const result = await base44.entities.EducationDraft.updateMany(
-      { id: draftId, revision: serverRevision } as any,
-      { $set },
-    );
-    return { success: result.updated > 0, conflict: result.updated === 0 };
-  } catch (err: any) {
-    return { success: false, conflict: false };
-  }
+  assertRecordAccess();
+  const drawing = await persistDrawing(draft.drawing);
+  const revision = serverRevision + 1;
+  const result = await base44.entities.EducationDraft.updateMany(
+    { id: draftId, revision: serverRevision } as any,
+    {
+      $set: {
+        note: draft.note,
+        english: draft.english,
+        spanish: draft.spanish,
+        plan_english: draft.planEnglish,
+        plan_spanish: draft.planSpanish,
+        caption_english: draft.captionEnglish,
+        caption_spanish: draft.captionSpanish,
+        include_procedure: draft.includeProcedure,
+        delivery_language: draft.deliveryLanguage,
+        resources: draft.resources,
+        anatomy_notes: draft.anatomyNotes,
+        checks: draft.checks,
+        drawing_file_uri: drawing.fileUri,
+        drawing_view: drawing.view,
+        revision,
+      },
+    },
+  );
+  return result.updated > 0 ? { status: "saved", revision, drawingFileUri: drawing.fileUri } : { status: "conflict" };
 }
 
-// Approve a draft: save content AND set approved_at in one revision-checked operation.
-export async function approveDraft(draftId: string, serverRevision: number, draft: EducationDraft, now: string): Promise<SaveResult> {
-  const $set: Record<string, any> = {
-    note: draft.note,
-    english: draft.english,
-    spanish: draft.spanish,
-    plan_english: draft.planEnglish,
-    plan_spanish: draft.planSpanish,
-    caption_english: draft.captionEnglish,
-    caption_spanish: draft.captionSpanish,
-    include_procedure: draft.includeProcedure,
-    delivery_language: draft.deliveryLanguage,
-    resources: draft.resources,
-    anatomy_notes: draft.anatomyNotes,
-    checks: draft.checks,
-    approved_at: now,
-    revision: draft.revision,
-  };
-  try {
-    const result = await base44.entities.EducationDraft.updateMany(
-      { id: draftId, revision: serverRevision } as any,
-      { $set },
-    );
-    return { success: result.updated > 0, conflict: result.updated === 0 };
-  } catch {
-    return { success: false, conflict: false };
-  }
-}
-
-// Save contact details (patient) and appointment fields (visit).
 export async function saveContactAndAppointment(
   patientId: string,
   visitId: string,
   phone: string,
   address: string,
   appointment: { startsAt: string; endsAt: string; hospital: string; address: string },
-): Promise<boolean> {
+): Promise<void> {
+  assertRecordAccess();
   await base44.entities.Patient.update(patientId, { phone, address } as any);
   await base44.entities.Visit.update(visitId, {
     appointment_starts_at: appointment.startsAt,
@@ -261,57 +266,60 @@ export async function saveContactAndAppointment(
     appointment_hospital: appointment.hospital,
     appointment_address: appointment.address,
   } as any);
-  return true;
 }
 
-// ─── Admin operations ──────────────────────────────────────────────────────
+// ─── Admin operations (explicit admins only; enforced by admin-only RLS) ───
+
+export type MembershipStatus = "approved" | "pending" | "revoked" | "none";
 
 export type AdminUser = {
   id: string;
   email: string;
   full_name: string | null;
   role: string;
-  care_team_approved: boolean;
-  care_team_display_name: string;
+  membership: MembershipStatus;
 };
 
+async function findMembership(userId: string): Promise<any | null> {
+  const page = await base44.entities.CareTeamMembership.filter({ user_id: userId }, { limit: 1 }) as any;
+  return (page.items ?? page)[0] ?? null;
+}
+
 export async function listUsers(): Promise<AdminUser[]> {
-  const users = await base44.entities.User.list("-created_date", 100) as any[];
+  await requireAdmin();
+  const [users, memberships] = await Promise.all([
+    base44.entities.User.list("-created_date", 100) as Promise<any[]>,
+    base44.entities.CareTeamMembership.filter({}, { limit: 200 }) as Promise<any>,
+  ]);
+  const statusByUser = new Map<string, MembershipStatus>((memberships.items ?? memberships).map((m: any) => [m.user_id, m.status]));
   return users.map((u: any) => ({
     id: u.id,
     email: u.email,
     full_name: u.full_name,
     role: u.role,
-    care_team_approved: !!u.care_team_approved,
-    care_team_display_name: u.care_team_display_name ?? "",
+    membership: statusByUser.get(u.id) ?? "none",
   }));
 }
 
-export async function approveDoctor(userId: string, email: string, displayName: string): Promise<void> {
-  await base44.entities.User.update(userId, {
-    care_team_approved: true,
-    care_team_display_name: displayName || email,
-  } as any);
-
-  // Create or update CareTeamMembership
-  const existing = await base44.entities.CareTeamMembership.filter({ user_id: userId }) as any;
-  const existingItems = existing.items ?? existing;
-  if (existingItems.length === 0) {
-    await base44.entities.CareTeamMembership.create({
-      user_id: userId,
-      email,
-      display_name: displayName || email,
-      status: "approved",
-    } as any);
+// Approval is always an explicit admin action on a chosen user. Email and name come from the stored
+// User record, not from the caller, and nothing here ever approves the calling admin automatically.
+export async function approveDoctor(userId: string): Promise<void> {
+  await requireAdmin();
+  const target = await base44.entities.User.get(userId) as any;
+  const displayName = target.full_name || target.email;
+  const existing = await findMembership(target.id);
+  if (existing) {
+    await base44.entities.CareTeamMembership.update(existing.id, { status: "approved", display_name: displayName } as any);
   } else {
-    await base44.entities.CareTeamMembership.update(existingItems[0].id, {
-      status: "approved",
-      display_name: displayName || email,
-    } as any);
+    await base44.entities.CareTeamMembership.create({ user_id: target.id, email: target.email, display_name: displayName, status: "approved" } as any);
   }
 }
 
-export async function provisionDemoData(doctorUserId: string, doctorEmail: string): Promise<number> {
+export async function provisionDemoData(doctorUserId: string): Promise<number> {
+  await requireAdmin();
+  const membership = await findMembership(doctorUserId);
+  if (!membership || membership.status !== "approved") throw new Error("Approve this person's care-team membership before assigning patients.");
+
   const seeds = [
     { name: "María Rivera", firstName: "María", initials: "MR", phone: "+12025550101", address: "120 Example Street", caseKind: "colon" as const, day: 12, hour: 14 },
     { name: "José García", firstName: "José", initials: "JG", phone: "+12025550102", address: "240 Sample Lane", caseKind: "general" as const, day: 13, hour: 15 },
@@ -329,7 +337,7 @@ export async function provisionDemoData(doctorUserId: string, doctorEmail: strin
       preferred_language: "es",
       case_kind: seed.caseKind,
       assigned_doctor_id: doctorUserId,
-      assigned_doctor_email: doctorEmail,
+      assigned_doctor_email: membership.email,
       is_synthetic_demo: true,
     } as any);
 
@@ -376,7 +384,8 @@ export async function provisionDemoData(doctorUserId: string, doctorEmail: strin
       resources: draftContent.resources,
       anatomy_notes: draftContent.anatomyNotes,
       checks: draftContent.checks,
-      approved_at: draftContent.approvedAt,
+      drawing_file_uri: "",
+      drawing_view: "",
     } as any);
     count++;
   }

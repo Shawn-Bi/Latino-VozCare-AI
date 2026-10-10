@@ -1,10 +1,10 @@
 {
   "name": "VozCare AI",
-  "description": "Synthetic-data VozCare prototype: doctor visit review and a patient companion website. Calls, SMS, and local demo access remain simulated.",
+  "description": "Synthetic-data VozCare prototype: Google sign-in, admin-approved care-team memberships, and education drafts. Patient records stay locked to doctors until a secure backend operation exists. SMS, calls, patient links, and final approval are not connected.",
   "site": {
     "outputDirectory": "dist",
-    "buildCommand": "pnpm build",
-    "serveCommand": "pnpm dev",
-    "installCommand": "pnpm install --frozen-lockfile"
+    "buildCommand": "npm run build",
+    "serveCommand": "npm run dev",
+    "installCommand": "npm ci"
   }
 }

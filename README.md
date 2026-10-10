@@ -7,32 +7,29 @@ Reviewed React frontend for a synthetic-data care follow-up prototype.
 - Implementation and backend contracts: [Base44 handoff](docs/BASE44_HANDOFF.md)
 - Earlier team planning documents: [PRD v2](VozCare_PRD_v2_EN.md) and [README v2](VozCare_README_v2_EN.md). These documents are preserved; their delivery flow and integration status differ from the current frontend described below.
 
-## Current journey
+## Current status
 
-1. Continue as the demo doctor and select a patient.
-2. Review that patient's visit, contact information, appointment, bilingual education draft, reference anatomy model, and reading links.
-3. Approve an immutable patient-facing packet and create a personal demo link. SMS remains simulated.
-4. Open the link in another tab of the same browser. It shows patient-only content and starts one simulated call; refreshing does not start another.
-5. Typed examples show approved care, the saved appointment, directions from the saved address, or help.
-6. Confirm an assistance request and review its status in that patient's doctor record.
-
-The app uses browser-local storage. Google sign-in, server authorization, database persistence, cross-device patient links, live SMS/calls, and live maps are not connected. Use fictional data only.
+1. Sign in with Google from the doctor view (`/?view=doctor`). An admin must approve your care-team membership.
+2. Admins approve memberships and can create synthetic demo patients from the doctor view, even before approving their own membership. Nothing is approved automatically.
+3. Patient, visit and education-draft data is admin-only. Doctors cannot open patient records until a Base44-hosted backend operation exists; it needs the Builder plan or higher. See the [handoff](docs/BASE44_HANDOFF.md) for the required checks.
+4. Once records are available, doctors review and save a bilingual education draft, including a saved drawing. Every save advances the draft revision, and a stale save reports a conflict.
+5. Final approval, immutable approved packets, personal patient links, SMS, calls, and live maps are not built or connected. Use fictional data only.
 
 ## Local development
 
-Use Node.js 24 and pnpm 9.
+Use Node.js 24 and npm. `package-lock.json` is the only lockfile.
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm dev
+npm ci
+npm run dev
 ```
 
 The frontend development server uses http://127.0.0.1:5174.
 
 ```sh
-pnpm exec tsc --noEmit
+npx tsc --noEmit
 node --experimental-strip-types --test tests/workflow.test.ts
-pnpm build
+npm run build
 ```
 
 ## Base44 editor connection

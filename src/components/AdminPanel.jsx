@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { listUsers, approveDoctor, provisionDemoData } from "@/lib/vozcare-api";
 
-export default function AdminPanel({ onProvisioned }) {
+export default function AdminPanel({ onProvisioned, onMembershipChanged }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(null);
-  const [provisioning, setProvisioning] = useState(false);
-  const [provisionResult, setProvisionResult] = useState("");
+  const [result, setResult] = useState("");
 
   const refresh = async () => {
     setLoading(true);
     setError("");
     try {
-      const list = await listUsers();
-      setUsers(list);
+      setUsers(await listUsers());
     } catch (err) {
       setError(err.message || "Could not load users.");
     } finally {
@@ -24,47 +22,44 @@ export default function AdminPanel({ onProvisioned }) {
 
   useEffect(() => { refresh(); }, []);
 
-  const handleApprove = async (user) => {
-    setBusy(user.id);
+  const run = async (user, action, work) => {
+    setBusy(`${action}:${user.id}`);
     setError("");
+    setResult("");
     try {
-      await approveDoctor(user.id, user.email, user.full_name || user.email);
-      await refresh();
+      await work();
     } catch (err) {
-      setError(err.message || "Could not approve doctor.");
+      setError(err.message || "That action failed.");
     } finally {
       setBusy(null);
     }
   };
 
-  const handleProvision = async (user) => {
-    setProvisioning(true);
-    setProvisionResult("");
-    setError("");
-    try {
-      const count = await provisionDemoData(user.id, user.email);
-      setProvisionResult(`Created ${count} synthetic demo patients with visits and education drafts.`);
-      onProvisioned();
-    } catch (err) {
-      setError(err.message || "Could not provision demo data.");
-    } finally {
-      setProvisioning(false);
-    }
-  };
+  const handleApprove = (user) => run(user, "approve", async () => {
+    await approveDoctor(user.id);
+    await refresh();
+    await onMembershipChanged();
+  });
+
+  const handleProvision = (user) => run(user, "provision", async () => {
+    const count = await provisionDemoData(user.id);
+    setResult(`Created ${count} synthetic demo patients with visits and education drafts for ${user.email}.`);
+    onProvisioned();
+  });
 
   return (
     <section className="panel" style={{ marginBottom: "var(--space-4)" }}>
       <div className="panel-heading">
         <div>
           <h2>Admin · Care-team management</h2>
-          <p>Approve doctors and provision synthetic demo records. No real patient data is used.</p>
+          <p>Approving a doctor and creating synthetic demo records are explicit admin actions. Nothing is approved automatically, including your own account.</p>
         </div>
         <button type="button" className="button secondary" onClick={refresh} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
         </button>
       </div>
       {error && <p role="alert" style={{ padding: "var(--space-3)", color: "var(--red)" }}>{error}</p>}
-      {provisionResult && <p role="status" style={{ padding: "var(--space-3)", color: "var(--green)" }}>{provisionResult}</p>}
+      {result && <p role="status" style={{ padding: "var(--space-3)", color: "var(--green)" }}>{result}</p>}
       {loading ? (
         <p style={{ padding: "var(--space-4)", color: "var(--muted)" }}>Loading users…</p>
       ) : users.length === 0 ? (
@@ -78,28 +73,20 @@ export default function AdminPanel({ onProvisioned }) {
                 <strong style={{ display: "block", marginTop: "var(--space-1)", color: "var(--navy-deep)" }}>
                   {user.full_name || user.email}
                 </strong>
-                <span className={`badge ${user.care_team_approved ? "success" : "warning"}`}>
-                  <i />{user.care_team_approved ? "Approved" : "Pending"}
+                <span className={`badge ${user.membership === "approved" ? "success" : "warning"}`}>
+                  <i />{user.membership === "approved" ? "Membership approved" : user.membership === "revoked" ? "Membership revoked" : "Membership not approved"}
                 </span>
                 {user.role === "admin" && <span className="badge info" style={{ marginLeft: "var(--space-1)" }}><i />Admin</span>}
               </div>
               <div className="resource-actions">
-                {!user.care_team_approved && (
-                  <button
-                    type="button"
-                    onClick={() => handleApprove(user)}
-                    disabled={busy === user.id}
-                  >
-                    {busy === user.id ? "Approving…" : "Approve doctor"}
+                {user.membership !== "approved" && (
+                  <button type="button" onClick={() => handleApprove(user)} disabled={busy !== null}>
+                    {busy === `approve:${user.id}` ? "Approving…" : "Approve doctor"}
                   </button>
                 )}
-                {user.care_team_approved && (
-                  <button
-                    type="button"
-                    onClick={() => handleProvision(user)}
-                    disabled={provisioning}
-                  >
-                    {provisioning ? "Provisioning…" : "Provision demo patients"}
+                {user.membership === "approved" && (
+                  <button type="button" onClick={() => handleProvision(user)} disabled={busy !== null}>
+                    {busy === `provision:${user.id}` ? "Creating…" : "Create synthetic demo patients"}
                   </button>
                 )}
               </div>
