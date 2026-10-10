@@ -23,7 +23,7 @@ export default function DemoWorkspace({ language, onExit }: { language: Language
     {!selected ? <>
       <div className="workspace-heading compact-heading"><div><h1>{es ? "Mis pacientes (demo)" : "My patients (demo)"}</h1><p>{es ? "Elige un paciente ficticio para revisar su visita y educación." : "Pick a fictional patient to review their visit and education."}</p></div><button type="button" className="button secondary" onClick={onExit}>{es ? "Salir de la demo" : "Exit demo"}</button></div>
       <section className="panel"><ul className="patient-rows">{records.map((r) => <li key={r.patient.id}>
-        <button type="button" className="patient-row" disabled={r.patient.id !== "demo-maria"} title={r.patient.id !== "demo-maria" ? (es ? "No disponible en la demo" : "Not available in the demo") : undefined} onClick={() => { setSelectedId(r.patient.id); window.scrollTo({ top: 0 }); }}>
+        <button type="button" className="patient-row" disabled={r.patient.id !== "demo-maria"} title={r.patient.id !== "demo-maria" ? (es ? "No disponible en la demo" : "Not available in the demo") : undefined} onClick={() => { if (r.patient.id !== "demo-maria") return; setSelectedId(r.patient.id); window.scrollTo({ top: 0 }); }}>
           <span className="person"><i>{r.patient.initials}</i><span><strong>{r.patient.name}</strong><small>Demo · {es ? "Español" : "Spanish"}</small></span></span>
           <span><span className="cell-label">{es ? "Caso" : "Case"}</span>{r.patient.caseKind === "colon" ? (es ? "Cáncer de colon" : "Colon cancer") : (es ? "Seguimiento" : "Follow-up")}</span>
           <span><span className="cell-label">{es ? "Cita" : "Appointment"}</span>{when(r.visit.appointment.startsAt)}</span>

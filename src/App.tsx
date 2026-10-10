@@ -112,7 +112,7 @@ export default function App() {
   const { isAuthenticated, isLoadingAuth, user, authError, isCareTeamApproved: isApproved, refreshMembership } = useAuth();
   const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "doctor" ? "doctor" : "home");
   const [language, setLanguage] = useState<Language>("en");
-  const [liveToken] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get("view") === "live-patient" ? q.get("token") : null; });
+  const [liveToken] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get("view") === "live-patient" ? (q.get("token") || window.location.hash.slice(1) || null) : null; });
   const [toast, setToast] = useState("");
   const [patients, setPatients] = useState<PatientListEntry[] | null>(null);
   const [patientsError, setPatientsError] = useState("");
