@@ -224,6 +224,43 @@ export async function saveContactAndAppointment(
   await invokeFunction("doctorSaveContact", { patientId, visitId, phone, address, appointment });
 }
 
+// ─── Packet approval and patient link (server-side authorized) ────────────
+
+export type ApprovalResult = { packetId: string; token: string; expiresAt: string };
+
+export async function approvePacket(patientId: string, visitId: string, draftId: string, serverRevision: number): Promise<ApprovalResult> {
+  const data = await invokeFunction("approvePacket", { patientId, visitId, draftId, serverRevision });
+  return { packetId: data.packetId, token: data.token, expiresAt: data.expiresAt };
+}
+
+export type PatientPacketView = {
+  patientName: string;
+  firstName: string;
+  initials: string;
+  deliveryLanguage: Language;
+  english: string;
+  spanish: string;
+  planEnglish: string;
+  planSpanish: string;
+  captionEnglish: string;
+  captionSpanish: string;
+  includeProcedure: boolean;
+  resources: ("pending" | "accepted" | "rejected")[];
+  drawingUrl: string;
+  drawingView: string;
+  caseKind: "colon" | "general";
+  appointment: { startsAt: string; endsAt: string; timeZone: string; hospital: string; address: string };
+  startingAddress: string;
+  approvedAt: string;
+};
+
+export type PatientLinkView = { callAttempts: number; callEndedAt: string; lastCallId: string };
+
+export async function validatePatientLink(token: string): Promise<{ packet: PatientPacketView; link: PatientLinkView }> {
+  const data = await invokeFunction("validatePatientLink", { token });
+  return { packet: data.packet, link: data.link };
+}
+
 // ─── Admin operations (explicit admins only; enforced by admin-only RLS) ───
 
 export type MembershipStatus = "approved" | "pending" | "revoked" | "none";

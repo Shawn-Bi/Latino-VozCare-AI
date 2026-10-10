@@ -1,0 +1,69 @@
+{
+  "name": "PatientLink",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "required": true
+    },
+    "patient_id": {
+      "type": "string",
+      "required": true
+    },
+    "packet_id": {
+      "type": "string",
+      "required": true
+    },
+    "approved_by_id": {
+      "type": "string",
+      "required": true
+    },
+    "expires_at": {
+      "type": "string",
+      "required": true
+    },
+    "revoked_at": {
+      "type": "string",
+      "default": ""
+    },
+    "opened_at": {
+      "type": "string",
+      "default": ""
+    },
+    "call_attempts": {
+      "type": "number",
+      "default": 0
+    },
+    "last_call_id": {
+      "type": "string",
+      "default": ""
+    },
+    "call_ended_at": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}

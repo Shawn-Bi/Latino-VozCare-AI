@@ -17,12 +17,13 @@ export default async function(req: Request): Promise<Response> {
 
     await loadAssignedPatient(base44, user.id, patientId);
 
-    const visitPage = await base44.asServiceRole.entities.Visit.filter(
-      { id: visitId, patient_id: patientId },
-      { limit: 1 }
-    );
-    const visitItems = visitPage.items ?? visitPage;
-    if (!visitItems || visitItems.length === 0) throw new AuthError(403, "This visit is not assigned to you.");
+    let visit;
+    try {
+      visit = await base44.asServiceRole.entities.Visit.get(visitId);
+    } catch {
+      throw new AuthError(403, "This visit is not assigned to you.");
+    }
+    if (!visit || visit.patient_id !== patientId) throw new AuthError(403, "This visit is not assigned to you.");
 
     await base44.asServiceRole.entities.Patient.update(patientId, { phone, address });
     await base44.asServiceRole.entities.Visit.update(visitId, {

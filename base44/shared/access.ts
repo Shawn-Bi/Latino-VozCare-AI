@@ -36,15 +36,16 @@ export async function requireApprovedDoctor(base44: any) {
 // Throws 403 otherwise. Used for every per-patient operation.
 export async function loadAssignedPatient(base44: any, userId: string, patientId: string) {
   if (!patientId) throw new AuthError(400, "A patient is required.");
-  const page = await base44.asServiceRole.entities.Patient.filter(
-    { id: patientId, assigned_doctor_id: userId },
-    { limit: 1 }
-  );
-  const items = page.items ?? page;
-  if (!items || items.length === 0) {
+  let patient;
+  try {
+    patient = await base44.asServiceRole.entities.Patient.get(patientId);
+  } catch {
     throw new AuthError(403, "This patient is not assigned to you.");
   }
-  return items[0];
+  if (!patient || patient.assigned_doctor_id !== userId) {
+    throw new AuthError(403, "This patient is not assigned to you.");
+  }
+  return patient;
 }
 
 // Standard error response for a handler's catch block.

@@ -851,6 +851,13 @@ h1, h2, h3 { font-weight: var(--weight-semibold); }
 .save-bar button.secondary:hover:not(:disabled) { background: var(--off-white); }
 .demo-handoff { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .demo-handoff small { color: var(--muted); font-size: var(--text-meta); }
+.approved-link { display: grid; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--green-bg); }
+.approved-link .eyebrow { color: var(--green); }
+.approved-link-note { margin: 0; color: var(--muted); font-size: var(--text-meta); line-height: var(--leading-body); }
+.approved-link-input { width: 100%; min-height: var(--control-height); border: 1px solid var(--color-control-border); border-radius: var(--radius-control); padding: var(--space-2) var(--space-3); color: var(--navy-deep); background: var(--white); font: inherit; font-size: var(--text-meta); }
+.approved-link-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.approved-link-actions .button { text-decoration: none; }
+.approved-link small { color: var(--muted); font-size: var(--text-meta); }
 
 /* Doctor sign-in and pending states */
 .doctor-signin { max-width: 480px; margin: var(--space-16) auto; }

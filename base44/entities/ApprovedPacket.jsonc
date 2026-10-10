@@ -1,0 +1,149 @@
+{
+  "name": "ApprovedPacket",
+  "type": "object",
+  "properties": {
+    "patient_id": {
+      "type": "string",
+      "required": true
+    },
+    "visit_id": {
+      "type": "string",
+      "required": true
+    },
+    "approved_by_id": {
+      "type": "string",
+      "required": true
+    },
+    "revision": {
+      "type": "number",
+      "default": 1
+    },
+    "approved_at": {
+      "type": "string",
+      "required": true
+    },
+    "delivery_language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "es"
+      ],
+      "default": "es"
+    },
+    "english": {
+      "type": "string",
+      "default": ""
+    },
+    "spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "plan_english": {
+      "type": "string",
+      "default": ""
+    },
+    "plan_spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "caption_english": {
+      "type": "string",
+      "default": ""
+    },
+    "caption_spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "include_procedure": {
+      "type": "boolean",
+      "default": false
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "rejected"
+        ]
+      },
+      "default": []
+    },
+    "drawing_file_uri": {
+      "type": "string",
+      "default": ""
+    },
+    "drawing_view": {
+      "type": "string",
+      "default": ""
+    },
+    "case_kind": {
+      "type": "string",
+      "enum": [
+        "colon",
+        "general"
+      ],
+      "default": "general"
+    },
+    "appointment_starts_at": {
+      "type": "string",
+      "default": ""
+    },
+    "appointment_ends_at": {
+      "type": "string",
+      "default": ""
+    },
+    "appointment_time_zone": {
+      "type": "string",
+      "default": "America/New_York"
+    },
+    "appointment_hospital": {
+      "type": "string",
+      "default": ""
+    },
+    "appointment_address": {
+      "type": "string",
+      "default": ""
+    },
+    "starting_address": {
+      "type": "string",
+      "default": ""
+    },
+    "patient_name": {
+      "type": "string",
+      "default": ""
+    },
+    "patient_first_name": {
+      "type": "string",
+      "default": ""
+    },
+    "patient_initials": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}

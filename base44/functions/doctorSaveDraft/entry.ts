@@ -18,13 +18,14 @@ export default async function(req: Request): Promise<Response> {
       throw new AuthError(400, "Missing draft save details.");
     }
 
-    const draftPage = await base44.asServiceRole.entities.EducationDraft.filter(
-      { id: draftId },
-      { limit: 1 }
-    );
-    const draftItems = draftPage.items ?? draftPage;
-    if (!draftItems || draftItems.length === 0) throw new AuthError(404, "Draft not found.");
-    const patientId = draftItems[0].patient_id;
+    let draft;
+    try {
+      draft = await base44.asServiceRole.entities.EducationDraft.get(draftId);
+    } catch {
+      throw new AuthError(404, "Draft not found.");
+    }
+    if (!draft) throw new AuthError(404, "Draft not found.");
+    const patientId = draft.patient_id;
     await loadAssignedPatient(base44, user.id, patientId);
 
     const revision = serverRevision + 1;

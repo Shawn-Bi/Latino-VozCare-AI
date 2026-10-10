@@ -5,7 +5,7 @@ import { initialEducation, editEducation, type EducationDraft } from "./educatio
 import ApprovedCare from "./ApprovedCare";
 import { initialDemo, initialWorkspace, appointmentLabel, localAppointmentValue, appointmentInstant, type Patient, type Appointment, type DemoState, type Language, type Visit } from "./workflow";
 import { useAuth } from "./lib/AuthContext";
-import { loadAssignedPatients, loadPatientData, saveDraft, saveContactAndAppointment, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
+import { loadAssignedPatients, loadPatientData, saveDraft, saveContactAndAppointment, approvePacket, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
 import { DOCTOR_RECORD_ACCESS } from "./lib/record-access";
 import RecordsLocked from "./components/RecordsLocked";
 import UnavailableNotice from "./components/UnavailableNotice";
@@ -15,6 +15,7 @@ import { base44 } from "./api/base44Client";
 type View = "home" | "doctor" | "patient";
 type DoctorTab = "patients" | "care" | "session" | "queue";
 type SaveState = "idle" | "saving" | "saved" | "error" | "conflict";
+type ApprovalState = { status: "idle" } | { status: "approving" } | { status: "approved"; token: string; expiresAt: string; linkUrl: string } | { status: "error"; message: string };
 const SiteLanguageContext = createContext<Language>("en");
 type IconName = "home" | "doctor" | "patient" | "arrow" | "check" | "calendar" | "clock" | "phone" | "message" | "map" | "car" | "bus" | "walk" | "help" | "care" | "tasks" | "chevron" | "alert" | "language" | "reset" | "download" | "route" | "close" | "send" | "shield";
 
@@ -119,6 +120,7 @@ export default function App() {
   const [doctorTab, setDoctorTab] = useState<DoctorTab>("patients");
   const [draftSaveState, setDraftSaveState] = useState<SaveState>("idle");
   const [contactSaveState, setContactSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [approvalState, setApprovalState] = useState<ApprovalState>({ status: "idle" });
   const [refreshKey, setRefreshKey] = useState(0);
   // Each async save/reload belongs to the selection that started it. A new object means a different selection,
   // so a late response for a previous patient is ignored instead of restoring that patient.
@@ -158,7 +160,7 @@ export default function App() {
 
   const selectPatient = (id: string | null) => {
     selectionRef.current = { id };
-    setSelectedData(null); setSelectedError(""); setDraftSaveState("idle"); setContactSaveState("idle");
+    setSelectedData(null); setSelectedError(""); setDraftSaveState("idle"); setContactSaveState("idle"); setApprovalState({ status: "idle" });
     setSelectedId(id);
   };
   const handleSignOut = () => { base44.auth.logout("/"); selectPatient(null); setPatients(null); };
@@ -207,6 +209,18 @@ export default function App() {
     }
   };
 
+  const handleApprove = async () => {
+    if (!selectedData) return;
+    setApprovalState({ status: "approving" });
+    try {
+      const result = await approvePacket(selectedData.patient.id, selectedData.visitId, selectedData.draftId, selectedData.serverRevision);
+      const linkUrl = `${window.location.origin}/?view=live-patient&token=${result.token}`;
+      setApprovalState({ status: "approved", token: result.token, expiresAt: result.expiresAt, linkUrl });
+    } catch (err: any) {
+      setApprovalState({ status: "error", message: err?.message || "Could not approve the packet." });
+    }
+  };
+
   const handleReload = async () => {
     const selection = selectionRef.current;
     if (!selection.id) return;
@@ -237,6 +251,7 @@ export default function App() {
           onSelectPatient={(id) => { selectPatient(id); setDoctorTab("patients"); }} onBack={() => selectPatient(null)}
           setEducation={setEducation} onSaveDraft={handleSaveDraft} draftSaveState={draftSaveState} onReload={handleReload}
           onSaveContact={handleSaveContact} contactSaveState={contactSaveState}
+          onApprove={handleApprove} approvalState={approvalState}
           isAdmin={isAdmin} isApproved={isApproved} recordsOpen={recordsOpen} onProvisioned={handleProvisioned} onMembershipChanged={refreshMembership}
           tab={doctorTab} setTab={setDoctorTab} setToast={setToast} language={language}
         />
@@ -416,13 +431,14 @@ function FeaturePhone({ feature, language }: { feature: typeof homeFeatures[numb
   </div>;
 }
 
-function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedId, selectedData, selectedError, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, isAdmin, isApproved, recordsOpen, onProvisioned, onMembershipChanged, tab, setTab, setToast, language }: {
+function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedId, selectedData, selectedError, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, onApprove, approvalState, isAdmin, isApproved, recordsOpen, onProvisioned, onMembershipChanged, tab, setTab, setToast, language }: {
   user: { email: string; full_name: string | null; role: string }; onSignOut: () => void;
   patients: PatientListEntry[] | null; isLoadingPatients: boolean; patientsError: string;
   selectedId: string | null; selectedData: LoadedPatientData | null; selectedError: string;
   onSelectPatient: (id: string) => void; onBack: () => void;
   setEducation: Dispatch<SetStateAction<EducationDraft>>; onSaveDraft: () => void; draftSaveState: SaveState; onReload: () => void;
   onSaveContact: (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => void; contactSaveState: "idle" | "saving" | "saved" | "error";
+  onApprove: () => void; approvalState: ApprovalState;
   isAdmin: boolean; isApproved: boolean; recordsOpen: boolean; onProvisioned: () => void; onMembershipChanged: () => void;
   tab: DoctorTab; setTab: (tab: DoctorTab) => void; setToast: (value: string) => void; language: Language;
 }) {
@@ -467,7 +483,7 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
           {tab === "care" && <>
             <p className="workspace-language-note">{es ? "Los controles de revisión están en inglés. El paquete del paciente está disponible en español e inglés." : "Review controls are in English. Patient packets are available in Spanish and English."}</p>
             <section className="panel delivery-review"><h2>{es ? "Datos de entrega guardados" : "Saved delivery details"}</h2><p>{selectedData.patient.name} · {selectedData.patient.phone} · {selectedData.patient.address}</p><p>{appointmentLabel(selectedData.visit.appointment, language)} · {selectedData.visit.appointment.hospital}</p><p>{es ? "La aprobación final y la entrega al paciente aún no están disponibles. El SMS y las llamadas no están conectados." : "Final approval and patient delivery are not available yet. SMS and calls are not connected."}</p>{deliveryIssue && <p role="alert">{deliveryIssue}</p>}</section>
-            <EducationReview key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} />
+            <EducationReview key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} onApprove={onApprove} approvalState={approvalState} deliveryIssue={deliveryIssue ?? undefined} />
             <DeliveryPanel selectedData={selectedData} language={language} />
           </>}
           {tab === "session" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Seguimiento" : "Follow-up"}</h2></div></div><UnavailableNotice title={es ? "Llamadas y conversación no conectadas" : "Calls and conversation are not connected"} message={es ? "El servicio de llamadas y el agente de conversación no están configurados. No se realiza ninguna llamada ni se procesan eventos de conversación." : "The call service and conversation agent have not been configured. No calls are placed and no conversation events are processed."} /></section>}
