@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <title>VozCare AI</title>
+  <!-- Brand mark: primary action #174A67, surface #FFFFFF. -->
+  <rect width="64" height="64" rx="20" fill="#174A67" />
+  <g stroke="#FFFFFF" stroke-width="6" stroke-linecap="round">
+    <path d="M19 24v16" />
+    <path d="M32 16v32" />
+    <path d="M45 21v22" />
+  </g>
+</svg>

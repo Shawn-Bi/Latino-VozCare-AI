@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.env*
+base44/.app.jsonc
+output/
+.DS_Store
