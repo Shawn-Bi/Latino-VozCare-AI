@@ -865,6 +865,63 @@ h1, h2, h3 { font-weight: var(--weight-semibold); }
 .pending-access { max-width: 480px; margin: var(--space-16) auto; }
 .loading-state { min-height: 200px; display: grid; place-items: center; color: var(--muted); font-size: var(--text-body); }
 
+/* Live patient view (older-adult readable) */
+.pv { min-height: 100vh; padding: 16px 16px 48px; font-family: var(--font-ui); font-size: 18px; line-height: 1.55; color: var(--navy-deep); background: var(--off-white); }
+.pv-shell { max-width: 720px; margin: 0 auto; }
+.pv-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 16px; border-bottom: 1px solid var(--line); }
+.pv-header .brand-name strong { font-size: 20px; }
+.pv-lang { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-control); background: var(--sky); }
+.pv-lang button { min-width: 48px; min-height: 48px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--navy); font-size: 16px; font-weight: var(--weight-bold); }
+.pv-lang button.active { background: var(--white); box-shadow: 0 1px 4px rgba(21,62,82,.12); }
+.pv-intro { padding: 24px 0 16px; }
+.pv-greeting { margin: 0 0 4px; font-size: 18px; color: var(--muted); }
+.pv-intro h1, .pv-message h1 { margin: 0; font-size: 30px; line-height: 1.2; color: var(--navy-deep); letter-spacing: -.3px; }
+.pv-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--white); }
+.pv-tabs button { min-height: 48px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); font-size: 18px; font-weight: var(--weight-semibold); }
+.pv-tabs button.active { background: var(--navy); color: var(--white); }
+.pv-stack { display: grid; gap: 16px; }
+.pv-card { padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--white); min-width: 0; overflow-wrap: anywhere; }
+.pv-card h2 { margin: 0 0 12px; font-size: 24px; line-height: 1.25; color: var(--navy-deep); }
+.pv-card h3 { margin: 20px 0 8px; font-size: 20px; color: var(--navy-deep); }
+.pv-card p { margin: 0 0 12px; color: var(--navy-deep); }
+.pv-card p:last-child { margin-bottom: 0; }
+.pv-meta { margin: 0; font-size: 14px; color: var(--muted); }
+.pv-card .pv-meta { margin: 8px 0 0; color: var(--muted); }
+.pv-status { display: flex; gap: 12px; align-items: flex-start; background: var(--sky); }
+.pv-status h2 { font-size: 20px; margin-bottom: 4px; }
+.pv-dot { width: 12px; height: 12px; margin-top: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--muted); }
+.pv-status.requested .pv-dot, .pv-status.requesting .pv-dot { background: var(--teal-deep); }
+.pv-status.error { background: var(--color-error-surface); }
+.pv-status.error .pv-dot { background: var(--red); }
+.pv-field { display: block; margin-bottom: 8px; font-weight: var(--weight-semibold); }
+.pv-input { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid var(--color-control-border); border-radius: var(--radius-control); background: var(--white); color: var(--navy-deep); font-size: 18px; }
+.pv-check { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0; min-height: 48px; cursor: pointer; }
+.pv-check input { width: 24px; height: 24px; margin: 2px 0 0; flex: 0 0 auto; accent-color: var(--teal-deep); }
+.pv .button { min-height: 48px; font-size: 18px; }
+.pv-primary { width: 100%; }
+.pv-error { margin: 12px 0 0 !important; padding: 12px; border-radius: var(--radius-control); background: var(--color-error-surface); color: var(--red) !important; }
+.pv-team { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.pv .pv-quiet { min-height: 48px; padding: 0 8px; font-size: 16px; text-decoration: underline; }
+.pv-appt { display: flex; gap: 16px; align-items: center; }
+.pv-date { width: 72px; flex: 0 0 auto; text-align: center; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
+.pv-date small { display: block; padding: 4px; background: var(--teal-deep); color: var(--white); font-size: 14px; font-weight: var(--weight-bold); text-transform: capitalize; }
+.pv-date strong { display: block; padding: 6px 0; font-size: 28px; color: var(--navy-deep); }
+.pv-strong { font-weight: var(--weight-semibold); text-transform: capitalize; }
+.pv-dl { margin: 0 0 16px; }
+.pv-dl dt { font-size: 14px; color: var(--muted); font-weight: var(--weight-semibold); }
+.pv-dl dd { margin: 2px 0 12px; }
+.pv-link-button { width: 100%; text-decoration: none; text-align: center; }
+.pv-img { display: block; max-width: 100%; height: auto; margin-bottom: 12px; border-radius: var(--radius-control); border: 1px solid var(--line); }
+.pv-list { margin: 0; padding-left: 20px; }
+.pv-list li { margin-bottom: 8px; }
+.pv a { color: var(--teal-deep); }
+.pv-footnote { text-align: center; }
+.pv-message { margin-top: 24px; }
+.pv-loading { min-height: 200px; display: grid; place-items: center; }
+.pv button:focus-visible, .pv a:focus-visible, .pv input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (min-width: 720px) { .pv { padding: 24px 32px 64px; } .pv-primary { width: auto; min-width: 240px; } .pv-link-button { width: auto; } }
+@media (max-width: 400px) { .pv-card { padding: 20px 16px; } .pv-intro h1 { font-size: 26px; } }
+
 /* Compact doctor workspace */
 .doctor-view { max-width: 1280px; padding-top: var(--space-6); font-family: "Source Sans 3", var(--font-ui); font-size: 16px; }
 .compact-heading { align-items: center; margin-bottom: var(--space-2); }

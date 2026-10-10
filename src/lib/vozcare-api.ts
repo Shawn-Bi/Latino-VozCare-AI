@@ -138,7 +138,9 @@ async function mapDraft(d: ServerDraft): Promise<EducationDraft> {
 // ─── Backend function invocation helper ───────────────────────────────────
 
 async function invokeFunction(name: string, payload: any): Promise<any> {
-  const res = await base44.functions.invoke(name, payload) as any;
+  let res: any;
+  try { res = await base44.functions.invoke(name, payload); }
+  catch (e: any) { throw new Error(e?.response?.data?.error || e?.data?.error || e?.message || `${name} failed.`); }
   if (res?.status >= 400) throw new Error(res.data?.error || `${name} failed.`);
   return res?.data;
 }

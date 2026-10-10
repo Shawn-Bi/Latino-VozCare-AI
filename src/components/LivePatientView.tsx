@@ -1,40 +1,51 @@
 import { useEffect, useState } from "react";
-import ApprovedCare from "../ApprovedCare";
 import CallPanel from "./CallPanel";
+import PatientHeader from "./patient/PatientHeader";
+import CallStatusCard, { type CallState } from "./patient/CallStatusCard";
+import FullDetails from "./patient/FullDetails";
+import { linkErrorText } from "./patient/patientText";
 import { validatePatientLink, type PatientPacketView, type PatientLinkView } from "../lib/vozcare-api";
 import type { Language } from "../workflow";
 
+type Tab = "conversation" | "details";
+
 export default function LivePatientView({ token }: { token: string }) {
   const [data, setData] = useState<{ packet: PatientPacketView; link: PatientLinkView } | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>("es");
+  const [tab, setTab] = useState<Tab>("conversation");
+  const [used, setUsed] = useState(0);
+  const [callState, setCallState] = useState<CallState>("none");
 
   useEffect(() => {
     validatePatientLink(token)
-      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); })
-      .catch((e) => setError(e.message || "This link is not valid."));
+      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "ended" : d.link.lastCallId ? "requested" : "none"); })
+      .catch((e) => setError(e.message || ""));
   }, [token]);
 
   const es = language === "es";
-  if (error) return <main className="patient-view"><div className="patient-shell"><section className="panel demo-login"><h1>{es ? "Enlace no disponible" : "Link unavailable"}</h1><p>{error}</p></section></div></main>;
-  if (!data) return <main className="patient-view"><div className="loading-state">{es ? "Cargando…" : "Loading…"}</div></main>;
+  const shell = (body: React.ReactNode) => <main className="pv" lang={language}><div className="pv-shell"><PatientHeader language={language} setLanguage={setLanguage} />{body}</div></main>;
+
+  if (error !== null) return shell(<section className="pv-card pv-message" role="alert"><h1>{es ? "No pudimos abrir tu información" : "We could not open your information"}</h1><p>{linkErrorText(error, language)}</p></section>);
+  if (!data) return shell(<p className="pv-message pv-loading" role="status">{es ? "Cargando tu información…" : "Loading your information…"}</p>);
 
   const p = data.packet;
-  const packet: any = { ...p, revision: 1, drawing: p.drawingUrl ? { image: p.drawingUrl } : null };
-  const when = p.appointment.startsAt ? new Intl.DateTimeFormat(es ? "es-US" : "en-US", { dateStyle: "full", timeStyle: "short", timeZone: p.appointment.timeZone }).format(new Date(p.appointment.startsAt)) : "";
+  const tabs: [Tab, string][] = [["conversation", es ? "Conversación" : "Conversation"], ["details", es ? "Detalles completos" : "Full details"]];
 
-  return <main className="patient-view" lang={language}><div className="patient-shell">
-    <header className="patient-header">
-      <div className="brand"><div className="brand-mark"><span /><span /><span /></div><div className="brand-copy"><div className="brand-name"><strong>VozCare</strong><small>AI</small></div></div></div>
-      <div className="language-toggle" role="group"><button className={es ? "active" : ""} onClick={() => setLanguage("es")}>ES</button><button className={!es ? "active" : ""} onClick={() => setLanguage("en")}>EN</button></div>
-    </header>
-    <div className="patient-intro"><div><h1>{es ? `Hola, ${p.firstName}.` : `Hello, ${p.firstName}.`}</h1><p>{es ? "Tu equipo de atención preparó esta información para ti." : "Your care team prepared this information for you."}</p></div><span className="patient-avatar">{p.initials}</span></div>
-    <div className="patient-context-layout">
-      <div className="active-context">
-        <ApprovedCare packet={packet} language={language} />
-        {when && <section className="response-card" style={{ marginTop: "var(--space-4)" }}><div className="response-card-heading"><div><small>{es ? "PRÓXIMA CITA" : "NEXT APPOINTMENT"}</small><h2>{when}</h2></div></div><p>{p.appointment.hospital} · {p.appointment.address}</p></section>}
-      </div>
-      <CallPanel token={token} link={data.link} language={language} />
+  return shell(<>
+    <div className="pv-intro">
+      <p className="pv-greeting">{es ? `Hola, ${p.firstName}.` : `Hello, ${p.firstName}.`}</p>
+      <h1>{es ? "Tu información de seguimiento" : "Your follow-up information"}</h1>
     </div>
-  </div></main>;
+    <div className="pv-tabs" role="tablist" aria-label={es ? "Secciones" : "Sections"}>
+      {tabs.map(([id, text]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{text}</button>)}
+    </div>
+    <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="pv-stack">
+      {tab === "conversation" ? <>
+        <CallStatusCard state={callState} language={language} />
+        <CallPanel token={token} language={language} used={used} setUsed={setUsed} state={callState} setState={setCallState} />
+        <p className="pv-meta">{es ? "Tu información guardada está siempre en Detalles completos, aunque no hagas la llamada." : "Your saved information is always in Full details, even if you don't make the call."}</p>
+      </> : <FullDetails p={p} language={language} />}
+    </div>
+  </>);
 }
