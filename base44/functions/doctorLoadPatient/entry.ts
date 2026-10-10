@@ -17,7 +17,8 @@ export default async function(req: Request): Promise<Response> {
       { sort: "-created_date", limit: 1 }
     );
     const visits = visitsPage.items ?? visitsPage;
-    if (!visits || visits.length === 0) throw new AuthError(404, "No visit found for this patient.");
+    // A newly added patient has no visit or draft yet: return the patient alone.
+    if (!visits || visits.length === 0) return Response.json({ patient, visit: null, draft: null });
     const visit = visits[0];
 
     const draftsPage = await base44.asServiceRole.entities.EducationDraft.filter(
@@ -25,7 +26,7 @@ export default async function(req: Request): Promise<Response> {
       { sort: "-revision", limit: 1 }
     );
     const drafts = draftsPage.items ?? draftsPage;
-    if (!drafts || drafts.length === 0) throw new AuthError(404, "No education draft found for this patient.");
+    if (!drafts || drafts.length === 0) return Response.json({ patient, visit: null, draft: null });
     const draft = drafts[0];
 
     return Response.json({

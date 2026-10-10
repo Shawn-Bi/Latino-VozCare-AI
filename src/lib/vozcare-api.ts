@@ -154,9 +154,15 @@ export type PatientListEntry = {
   caseKind: "colon" | "general";
   preferredLanguage: Language;
   draftRevision: number;
+  isSyntheticDemo: boolean;
+  educationStatus: EducationStatus;
+  followUpStatus: "not_started" | "link_ready" | "called";
   appointmentStartsAt: string;
   appointmentTimeZone: string;
 };
+
+export type EducationStatus = "none" | "draft" | "approved";
+export type PatientOnlyData = { empty: true; patient: Patient };
 
 export type LoadedPatientData = {
   patient: Patient;
@@ -171,13 +177,19 @@ export type SaveResult =
   | { status: "saved"; revision: number; drawingFileUri: string }
   | { status: "conflict" };
 
-export async function loadAssignedPatients(): Promise<PatientListEntry[]> {
-  const data = await invokeFunction("doctorLoadPatients", {});
+export async function loadAssignedPatients(search = "", status: EducationStatus | "" = ""): Promise<PatientListEntry[]> {
+  const data = await invokeFunction("doctorLoadPatients", { search, status });
   return (data.patients ?? []) as PatientListEntry[];
 }
 
-export async function loadPatientData(patientId: string): Promise<LoadedPatientData> {
+export async function createPatient(fields: { name: string; preferredLanguage: Language; phone: string; address: string }): Promise<string> {
+  const data = await invokeFunction("doctorCreatePatient", fields);
+  return data.id;
+}
+
+export async function loadPatientData(patientId: string): Promise<LoadedPatientData | PatientOnlyData> {
   const data = await invokeFunction("doctorLoadPatient", { patientId });
+  if (!data.visit || !data.draft) return { empty: true, patient: mapPatient(data.patient) };
   return {
     patient: mapPatient(data.patient),
     visit: mapVisit(data.visit),

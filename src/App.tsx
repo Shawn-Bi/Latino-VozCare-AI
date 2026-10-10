@@ -5,7 +5,10 @@ import { initialEducation, editEducation, type EducationDraft } from "./educatio
 import ApprovedCare from "./ApprovedCare";
 import { initialDemo, initialWorkspace, appointmentLabel, localAppointmentValue, appointmentInstant, type Patient, type Appointment, type DemoState, type Language, type Visit } from "./workflow";
 import { useAuth } from "./lib/AuthContext";
-import { loadAssignedPatients, loadPatientData, saveDraft, saveContactAndAppointment, approvePacket, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
+import PatientTable from "./components/doctor/PatientTable";
+import AddPatientDialog from "./components/doctor/AddPatientDialog";
+import EmptyPatientDetail from "./components/doctor/EmptyPatientDetail";
+import { loadPatientData, saveDraft, saveContactAndAppointment, approvePacket, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
 import { DOCTOR_RECORD_ACCESS } from "./lib/record-access";
 import RecordsLocked from "./components/RecordsLocked";
 import UnavailableNotice from "./components/UnavailableNotice";
@@ -13,7 +16,7 @@ import AdminPanel from "./components/AdminPanel";
 import LivePatientView from "./components/LivePatientView";
 import { base44 } from "./api/base44Client";
 
-type View = "home" | "doctor" | "patient";
+type View = "home" | "doctor" | "patient" | "admin";
 type DoctorTab = "patients" | "care" | "session" | "queue";
 type SaveState = "idle" | "saving" | "saved" | "error" | "conflict";
 type ApprovalState = { status: "idle" } | { status: "approving" } | { status: "approved"; token: string; expiresAt: string; linkUrl: string } | { status: "error"; message: string };
@@ -95,12 +98,12 @@ function checkDeliveryProblem(patient: Patient, visit: Visit): string | null {
   return null;
 }
 
-function GlobalNav({ view, navigate, language, setLanguage, user, onSignOut }: { view: View; navigate: (view: View) => void; language: Language; setLanguage: (language: Language) => void; user: { email: string } | null; onSignOut: () => void }) {
+function GlobalNav({ view, navigate, language, setLanguage, user, onSignOut }: { view: View; navigate: (view: View) => void; language: Language; setLanguage: (language: Language) => void; user: { email: string; role?: string } | null; onSignOut: () => void }) {
   const es = language === "es";
   return <header className="global-nav">
     <button className="brand-button" onClick={() => navigate("home")} aria-label={es ? "Inicio de VozCare AI" : "VozCare AI home"}><Logo /></button>
     <span />
-    <div className="nav-actions"><div className="language-toggle" role="group" aria-label={es ? "Idioma del sitio" : "Site language"}><button type="button" lang="es" aria-label="Español" aria-pressed={es} className={es ? "active" : ""} onClick={() => setLanguage("es")}>ES</button><button type="button" lang="en" aria-label="English" aria-pressed={!es} className={!es ? "active" : ""} onClick={() => setLanguage("en")}>EN</button></div>{user && <button className="reset-button" onClick={onSignOut} aria-label={es ? "Salir" : "Sign out"}><Icon name="reset" size={16} /><span>{es ? "Salir" : "Sign out"}</span></button>}</div>
+    <div className="nav-actions"><div className="language-toggle" role="group" aria-label={es ? "Idioma del sitio" : "Site language"}><button type="button" lang="es" aria-label="Español" aria-pressed={es} className={es ? "active" : ""} onClick={() => setLanguage("es")}>ES</button><button type="button" lang="en" aria-label="English" aria-pressed={!es} className={!es ? "active" : ""} onClick={() => setLanguage("en")}>EN</button></div>{user && <div className="nav-account"><small title={user.email}>{user.email}</small>{user.role === "admin" && <button type="button" className="nav-link" onClick={() => navigate(view === "admin" ? "doctor" : "admin")}>{view === "admin" ? (es ? "Pacientes" : "Patients") : (es ? "Administración" : "Admin")}</button>}</div>}{user && <button className="reset-button" onClick={onSignOut} aria-label={es ? "Salir" : "Sign out"}><Icon name="reset" size={16} /><span>{es ? "Salir" : "Sign out"}</span></button>}</div>
   </header>;
 }
 
@@ -115,6 +118,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedData, setSelectedData] = useState<LoadedPatientData | null>(null);
   const [selectedError, setSelectedError] = useState("");
+  const [selectedEmpty, setSelectedEmpty] = useState<Patient | null>(null);
   const [doctorTab, setDoctorTab] = useState<DoctorTab>("patients");
   const [draftSaveState, setDraftSaveState] = useState<SaveState>("idle");
   const [contactSaveState, setContactSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -136,30 +140,20 @@ export default function App() {
 
   // Patient records load only when the doctor has an approved membership AND the secure backend operation exists.
   useEffect(() => {
-    if (view !== "doctor" || !isAuthenticated || !recordsOpen) return;
-    let cancelled = false;
-    setPatientsError("");
-    loadAssignedPatients()
-      .then((list) => { if (!cancelled) setPatients(list); })
-      .catch((err) => { if (!cancelled) setPatientsError(err.message || "Could not load patients."); });
-    return () => { cancelled = true; };
-  }, [view, isAuthenticated, recordsOpen, user?.id, refreshKey]);
-
-  useEffect(() => {
     if (!selectedId || !recordsOpen) return;
     let cancelled = false;
     loadPatientData(selectedId)
-      .then((data) => { if (!cancelled) { setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle"); } })
+      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle"); })
       .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); });
     return () => { cancelled = true; };
   }, [selectedId, recordsOpen, refreshKey]);
 
-  const navigate = (next: View) => { setView(isAuthenticated && next !== "patient" ? "doctor" : next); window.scrollTo({ top: 0 }); };
+  const navigate = (next: View) => { setView(isAuthenticated && next === "home" ? "doctor" : next); window.scrollTo({ top: 0 }); };
   useEffect(() => { if (isAuthenticated && view === "home") setView("doctor"); }, [isAuthenticated, view]);
 
   const selectPatient = (id: string | null) => {
     selectionRef.current = { id };
-    setSelectedData(null); setSelectedError(""); setDraftSaveState("idle"); setContactSaveState("idle"); setApprovalState({ status: "idle" });
+    setSelectedData(null); setSelectedEmpty(null); setSelectedError(""); setDraftSaveState("idle"); setContactSaveState("idle"); setApprovalState({ status: "idle" });
     setSelectedId(id);
   };
   const handleSignOut = () => { base44.auth.logout("/"); selectPatient(null); setPatients(null); };
@@ -225,7 +219,7 @@ export default function App() {
     if (!selection.id) return;
     try {
       const data = await loadPatientData(selection.id);
-      if (selectionRef.current !== selection) return;
+      if (selectionRef.current !== selection || "empty" in data) return;
       editVersion.current++;
       setSelectedData(data); setDraftSaveState("idle");
     } catch {
@@ -248,7 +242,7 @@ export default function App() {
       : <DoctorView
           user={user!} onSignOut={handleSignOut}
           patients={patients} isLoadingPatients={patients === null} patientsError={patientsError}
-          selectedId={selectedId} selectedData={selectedData} selectedError={selectedError}
+          selectedId={selectedId} selectedData={selectedData} selectedError={selectedError} selectedEmpty={selectedEmpty}
           onSelectPatient={(id) => { selectPatient(id); setDoctorTab("patients"); }} onBack={() => selectPatient(null)}
           setEducation={setEducation} onSaveDraft={handleSaveDraft} draftSaveState={draftSaveState} onReload={handleReload}
           onSaveContact={handleSaveContact} contactSaveState={contactSaveState}
@@ -257,6 +251,7 @@ export default function App() {
           tab={doctorTab} setTab={setDoctorTab} setToast={setToast} language={language}
         />
     )}
+    {view === "admin" && isAuthenticated && isAdmin && <main className="workspace"><AdminPanel onProvisioned={handleProvisioned} onMembershipChanged={refreshMembership} /></main>}
     {view === "patient" && <PatientPreviewInfo language={language} navigate={navigate} />}
     {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
   </div></SiteLanguageContext.Provider>;
@@ -432,10 +427,10 @@ function FeaturePhone({ feature, language }: { feature: typeof homeFeatures[numb
   </div>;
 }
 
-function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedId, selectedData, selectedError, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, onApprove, approvalState, isAdmin, isApproved, recordsOpen, onProvisioned, onMembershipChanged, tab, setTab, setToast, language }: {
+function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsError, selectedId, selectedData, selectedError, selectedEmpty, onSelectPatient, onBack, setEducation, onSaveDraft, draftSaveState, onReload, onSaveContact, contactSaveState, onApprove, approvalState, isAdmin, isApproved, recordsOpen, onProvisioned, onMembershipChanged, tab, setTab, setToast, language }: {
   user: { email: string; full_name: string | null; role: string }; onSignOut: () => void;
   patients: PatientListEntry[] | null; isLoadingPatients: boolean; patientsError: string;
-  selectedId: string | null; selectedData: LoadedPatientData | null; selectedError: string;
+  selectedId: string | null; selectedData: LoadedPatientData | null; selectedError: string; selectedEmpty: Patient | null;
   onSelectPatient: (id: string) => void; onBack: () => void;
   setEducation: Dispatch<SetStateAction<EducationDraft>>; onSaveDraft: () => void; draftSaveState: SaveState; onReload: () => void;
   onSaveContact: (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => void; contactSaveState: "idle" | "saving" | "saved" | "error";
@@ -446,29 +441,21 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
   const es = language === "es";
   const tabs: { id: DoctorTab; label: string }[] = [{ id: "patients", label: es ? "Resumen" : "Overview" }, { id: "care", label: es ? "Revisión educativa" : "Education review" }, { id: "session", label: es ? "Seguimiento" : "Follow-up" }, { id: "queue", label: es ? "Solicitudes" : "Assistance requests" }];
   const deliveryIssue = selectedData ? checkDeliveryProblem(selectedData.patient, selectedData.visit) : null;
+  const [addOpen, setAddOpen] = useState(false);
+  const [listKey, setListKey] = useState(0);
 
   return <main className="workspace doctor-view">
-    <div className="workspace-heading"><div><PrototypeLabel /><p className="eyebrow">{es ? "ESPACIO DEL EQUIPO" : "CARE TEAM WORKSPACE"}</p><h1>{selectedData ? selectedData.patient.name : es ? "Mis pacientes" : "My patients"}</h1><p>{selectedData ? (es ? "Datos ficticios · Edición de borrador" : "Fictional data · Draft editing") : (es ? "Elige un paciente para revisar su visita y su paquete educativo." : "Choose a patient to review their visit and education packet.")}</p></div><div className="doctor-account"><strong>{user.full_name || user.email}</strong><small>{isApproved ? (es ? "Médico aprobado" : "Approved doctor") : (es ? "Administrador · membresía médica sin aprobar" : "Admin · doctor membership not approved")}</small><Button variant="quiet" onClick={onSignOut}>{es ? "Salir" : "Sign out"}</Button></div></div>
-
-    {isAdmin && !selectedId && <AdminPanel onProvisioned={onProvisioned} onMembershipChanged={onMembershipChanged} />}
+    {!selectedId && <div className="workspace-heading compact-heading"><div><h1>{es ? "Mis pacientes" : "My patients"}</h1><p>{es ? "Revisa visitas, paquetes educativos y seguimiento." : "Review visits, education packets, and follow-up."}</p></div>{recordsOpen && <button type="button" className="button" onClick={() => setAddOpen(true)}>{es ? "+ Agregar paciente" : "+ Add patient"}</button>}</div>}
+    {!selectedId && <p className="demo-data-note">{es ? "Algunos registros son datos de demostración ficticios y están marcados como «Demo»." : "Some records are fictional demo data and are marked “Demo”."}</p>}
 
     {!recordsOpen ? <RecordsLocked language={language} isApproved={isApproved} />
     : !selectedId ? <>
-      <section className="panel patient-list-panel">
-        <div className="panel-heading"><h2>{es ? "Pacientes asignados" : "Assigned patients"}</h2><span>{patients?.length ?? 0}</span></div>
-        {isLoadingPatients ? <div className="loading-state">{es ? "Cargando pacientes…" : "Loading patients…"}</div>
-        : patientsError ? <div className="loading-state" style={{ color: "var(--red)" }}>{patientsError}</div>
-        : !patients || patients.length === 0 ? <div className="empty-state"><span><Icon name="patient" /></span><h3>{es ? "Sin pacientes asignados" : "No patients assigned"}</h3><p>{es ? "Un administrador puede asignarte pacientes usando el panel de administración." : "An admin can assign patients to you using the admin panel."}</p></div>
-        : <>
-          <div className="patient-table-head"><span>{es ? "Paciente" : "Patient"}</span><span>{es ? "Educación" : "Education"}</span><span>{es ? "Seguimiento" : "Follow-up"}</span><span>{es ? "Cita" : "Appointment"}</span></div>
-          {patients.map((item) => <button type="button" className="patient-row patient-select" key={item.id} onClick={() => onSelectPatient(item.id)} aria-label={`${es ? "Abrir" : "Open"} ${item.name}`}>
-            <span className="person"><i>{item.initials}</i><span><strong>{item.name}</strong><small>{item.preferredLanguage === "es" ? "Español preferido" : "English preferred"} · {es ? "Ficticio" : "Fictional"}</small></span></span>
-            <Badge tone="warning">{es ? "Necesita revisión" : "Needs review"}</Badge>
-            <span>{es ? "Borrador" : "Draft"}</span>
-            <span>{item.appointmentStartsAt ? new Intl.DateTimeFormat(es ? "es-US" : "en-US", { month: "short", day: "numeric", timeZone: item.appointmentTimeZone }).format(new Date(item.appointmentStartsAt)) : "—"}<Icon name="chevron" size={16} /></span>
-          </button>)}
-        </>}
-      </section>
+      <PatientTable language={language} refreshKey={listKey} onSelect={onSelectPatient} />
+      <AddPatientDialog open={addOpen} language={language} onClose={() => setAddOpen(false)} onCreated={(id) => { setAddOpen(false); setListKey((k) => k + 1); setToast(es ? "Paciente agregado." : "Patient added."); onSelectPatient(id); }} />
+    </> : selectedEmpty ? <>
+      <button type="button" className="back-to-patients" onClick={onBack}>← {es ? "Todos los pacientes" : "All patients"}</button>
+      <h1 className="patient-detail-title">{selectedEmpty.name}</h1>
+      <EmptyPatientDetail patient={selectedEmpty} language={language} />
     </> : <>
       <button type="button" className="back-to-patients" onClick={onBack}>← {es ? "Todos los pacientes" : "All patients"}</button>
       {selectedData && <div className="patient-record-context"><span className="person"><i>{selectedData.patient.initials}</i><span><strong>{selectedData.patient.name}</strong><small>{selectedData.patient.phone} · {selectedData.patient.preferredLanguage === "es" ? "Español" : "English"}</small></span></span><span>{selectedData.patient.address || (es ? "Falta dirección" : "Address missing")}</span><Badge tone="warning">{es ? "Borrador" : "Draft"}</Badge></div>}
