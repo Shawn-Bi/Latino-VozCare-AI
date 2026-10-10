@@ -849,6 +849,8 @@ h1, h2, h3 { font-weight: var(--weight-semibold); }
 .save-bar button:disabled { opacity: .5; cursor: not-allowed; }
 .save-bar button.secondary { color: var(--navy); background: var(--white); }
 .save-bar button.secondary:hover:not(:disabled) { background: var(--off-white); }
+.demo-handoff { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.demo-handoff small { color: var(--muted); font-size: var(--text-meta); }
 
 /* Doctor sign-in and pending states */
 .doctor-signin { max-width: 480px; margin: var(--space-16) auto; }
