@@ -53,18 +53,9 @@
   },
   "rls": {
     "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "user"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "create": {
       "user_condition": {
@@ -72,18 +63,9 @@
       }
     },
     "update": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "user"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
       "user_condition": {
