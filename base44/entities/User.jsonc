@@ -1,0 +1,15 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "care_team_approved": {
+      "type": "boolean",
+      "default": false
+    },
+    "care_team_display_name": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "required": []
+}

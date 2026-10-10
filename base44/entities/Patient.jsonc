@@ -1,0 +1,109 @@
+{
+  "name": "Patient",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "first_name": {
+      "type": "string",
+      "required": true
+    },
+    "initials": {
+      "type": "string",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true
+    },
+    "address": {
+      "type": "string",
+      "required": true
+    },
+    "preferred_language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "es"
+      ],
+      "default": "es"
+    },
+    "case_kind": {
+      "type": "string",
+      "enum": [
+        "colon",
+        "general"
+      ],
+      "default": "general"
+    },
+    "assigned_doctor_id": {
+      "type": "string",
+      "required": true
+    },
+    "assigned_doctor_email": {
+      "type": "string",
+      "default": ""
+    },
+    "is_synthetic_demo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.assigned_doctor_id": "{{user.id}}"
+            },
+            {
+              "user_condition": {
+                "data.care_team_approved": true
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.assigned_doctor_id": "{{user.id}}"
+            },
+            {
+              "user_condition": {
+                "data.care_team_approved": true
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}

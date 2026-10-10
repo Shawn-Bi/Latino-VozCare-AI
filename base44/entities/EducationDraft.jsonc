@@ -1,0 +1,165 @@
+{
+  "name": "EducationDraft",
+  "type": "object",
+  "properties": {
+    "patient_id": {
+      "type": "string",
+      "required": true
+    },
+    "visit_id": {
+      "type": "string",
+      "required": true
+    },
+    "assigned_doctor_id": {
+      "type": "string",
+      "required": true
+    },
+    "revision": {
+      "type": "number",
+      "default": 1
+    },
+    "note": {
+      "type": "string",
+      "default": ""
+    },
+    "english": {
+      "type": "string",
+      "default": ""
+    },
+    "spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "plan_english": {
+      "type": "string",
+      "default": ""
+    },
+    "plan_spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "caption_english": {
+      "type": "string",
+      "default": ""
+    },
+    "caption_spanish": {
+      "type": "string",
+      "default": ""
+    },
+    "include_procedure": {
+      "type": "boolean",
+      "default": false
+    },
+    "delivery_language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "es"
+      ],
+      "default": "es"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "rejected"
+        ]
+      },
+      "default": [
+        "pending",
+        "pending"
+      ]
+    },
+    "anatomy_notes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "checks": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "boolean",
+          "default": false
+        },
+        "language": {
+          "type": "boolean",
+          "default": false
+        },
+        "visual": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "default": {
+        "note": false,
+        "language": false,
+        "visual": false
+      }
+    },
+    "approved_at": {
+      "type": "string",
+      "default": null
+    }
+  },
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.assigned_doctor_id": "{{user.id}}"
+            },
+            {
+              "user_condition": {
+                "data.care_team_approved": true
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.assigned_doctor_id": "{{user.id}}"
+            },
+            {
+              "user_condition": {
+                "data.care_team_approved": true
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}
