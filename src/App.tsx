@@ -8,7 +8,7 @@ import { useAuth } from "./lib/AuthContext";
 import PatientTable from "./components/doctor/PatientTable";
 import AddPatientDialog from "./components/doctor/AddPatientDialog";
 import EmptyPatientDetail from "./components/doctor/EmptyPatientDetail";
-import { loadPatientData, saveDraft, saveContactAndAppointment, approvePacket, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
+import { getExistingPatientLink, loadPatientData, saveDraft, saveContactAndAppointment, approvePacket, type PatientListEntry, type LoadedPatientData } from "./lib/vozcare-api";
 import { DOCTOR_RECORD_ACCESS } from "./lib/record-access";
 import RecordsLocked from "./components/RecordsLocked";
 import UnavailableNotice from "./components/UnavailableNotice";
@@ -143,7 +143,8 @@ export default function App() {
     if (!selectedId || !recordsOpen) return;
     let cancelled = false;
     loadPatientData(selectedId)
-      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle"); })
+      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle");
+        getExistingPatientLink(data.patient.id).then((l) => { if (!cancelled && l) setApprovalState((s) => s.status === "idle" ? { status: "approved", token: l.token, expiresAt: l.expiresAt, linkUrl: `${window.location.origin}/?view=live-patient&token=${l.token}` } : s); }).catch(() => {}); })
       .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); });
     return () => { cancelled = true; };
   }, [selectedId, recordsOpen, refreshKey]);

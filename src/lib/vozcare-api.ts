@@ -247,6 +247,11 @@ export async function approvePacket(patientId: string, visitId: string, draftId:
   return { packetId: data.packetId, token: data.token, expiresAt: data.expiresAt };
 }
 
+export async function getExistingPatientLink(patientId: string): Promise<{ token: string; expiresAt: string } | null> {
+  const data = await invokeFunction("doctorGetPatientLink", { patientId });
+  return data.link ?? null;
+}
+
 export type PatientPacketView = {
   patientName: string;
   firstName: string;

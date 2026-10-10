@@ -50,8 +50,8 @@ export default function FullDetails({ p, language }: { p: PatientPacketView; lan
     </section>}
 
     <section className="pv-card" aria-labelledby="d-help">
-      <h2 id="d-help">{es ? "¿Necesitas ayuda?" : "Need help?"}</h2>
-      <p>{es ? "Llama al consultorio de tu médico con cualquier pregunta. Si es una emergencia, llama al 911." : "Call your doctor's office with any questions. In an emergency, call 911."}</p>
+      <h2 id="d-help">{es ? "Contacto del equipo de atención" : "Care-team contact"}</h2>
+      <p>{es ? "Aún no se agregaron los datos de contacto del equipo de atención." : "Care-team contact details have not been added."}</p>
     </section>
     <p className="pv-meta pv-footnote">{es ? "Esta es la versión que revisó tu equipo." : "This is the version your care team reviewed."}</p>
   </div>;

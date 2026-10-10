@@ -19,7 +19,7 @@ export default function LivePatientView({ token }: { token: string }) {
 
   useEffect(() => {
     validatePatientLink(token)
-      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "ended" : d.link.lastCallId ? "requested" : "none"); })
+      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "error" : d.link.lastCallId ? "requested" : "none"); })
       .catch((e) => setError(e.message || ""));
   }, [token]);
 
