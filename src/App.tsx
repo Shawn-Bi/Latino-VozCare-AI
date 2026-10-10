@@ -1,6 +1,7 @@
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
 import { doctorTranslations } from "./doctor-translations";
 import EducationReview from "./EducationReview";
+import DemoWorkspace from "@/components/demo/DemoWorkspace";
 import { initialEducation, editEducation, type EducationDraft } from "./education";
 import ApprovedCare from "./ApprovedCare";
 import { initialDemo, initialWorkspace, appointmentLabel, localAppointmentValue, appointmentInstant, type Patient, type Appointment, type DemoState, type Language, type Visit } from "./workflow";
@@ -16,7 +17,7 @@ import AdminPanel from "./components/AdminPanel";
 import LivePatientView from "./components/LivePatientView";
 import { base44 } from "./api/base44Client";
 
-type View = "home" | "doctor" | "patient" | "admin";
+type View = "home" | "doctor" | "patient" | "admin" | "demo";
 type DoctorTab = "patients" | "care" | "session" | "queue";
 type SaveState = "idle" | "saving" | "saved" | "error" | "conflict";
 type ApprovalState = { status: "idle" } | { status: "approving" } | { status: "approved"; token: string; expiresAt: string; linkUrl: string } | { status: "error"; message: string };
@@ -253,6 +254,7 @@ export default function App() {
         />
     )}
     {view === "admin" && isAuthenticated && isAdmin && <main className="workspace"><AdminPanel onProvisioned={handleProvisioned} onMembershipChanged={refreshMembership} /></main>}
+    {view === "demo" && <DemoWorkspace language={language} onExit={() => navigate("home")} />}
     {view === "patient" && <PatientPreviewInfo language={language} navigate={navigate} />}
     {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
   </div></SiteLanguageContext.Provider>;
@@ -307,7 +309,7 @@ function Home({ navigate, language }: { navigate: (view: View) => void; language
         <p className="eyebrow">{es ? "SEGUIMIENTO POR VOZ QUE ACOMPAÑA AL PACIENTE" : "VOICE FOLLOW-UP THAT STAYS WITH THE PATIENT"}</p>
         <h1>{es ? "Cada paciente merece " : "Every patient deserves to "}<em>{es ? "entender su cuidado." : "understand their care."}</em></h1>
         <p className="hero-lead">{es ? "VozCare llama al día siguiente de la visita. Un sitio web sencillo responde junto con la conversación: instrucciones de cuidado, citas, indicaciones para llegar y una forma clara de contactar a tu equipo." : "VozCare follows up by phone the day after a visit. A simple website responds alongside the conversation—with care instructions, appointments, directions, and a clear path back to your team."}</p>
-        <div className="hero-actions"><Button onClick={() => navigate("doctor")} icon="arrow">{es ? "Abrir panel médico" : "Open doctor dashboard"}</Button><Button onClick={() => navigate("patient")} variant="quiet">{es ? "Ver experiencia del paciente" : "Preview patient experience"}</Button></div>
+        <div className="hero-actions"><Button onClick={() => navigate("doctor")} icon="arrow">{es ? "Abrir panel médico" : "Open doctor dashboard"}</Button><Button onClick={() => navigate("demo")} variant="secondary">{es ? "Probar como médico de demostración" : "Try as a demo doctor"}</Button><Button onClick={() => navigate("patient")} variant="quiet">{es ? "Ver experiencia del paciente" : "Preview patient experience"}</Button></div>
         <p className="hero-note"><Icon name="shield" size={16} /> {es ? "Datos ficticios · Llamadas y mensajes simulados" : "Fictional data · Calls and texts are simulated"}</p>
       </div>
       <div className="hero-visual">
