@@ -40,7 +40,8 @@ export async function dial(agentPhoneId: string, toNumber: string, vars: Record<
       agent_id: secrets.get("ELEVENLABS_AGENT_ID"),
       agent_phone_number_id: agentPhoneId,
       to_number: toNumber,
-      conversation_initiation_client_data: { dynamic_variables: vars },
+      // The agent's tools require demo_session_id; a fresh id per call.
+      conversation_initiation_client_data: { dynamic_variables: { demo_session_id: crypto.randomUUID(), ...vars } },
     }),
   });
   const result = await callRes.json().catch(() => ({}));
