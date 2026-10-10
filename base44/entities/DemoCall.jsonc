@@ -13,6 +13,22 @@
     "conversation_id": {
       "type": "string",
       "default": ""
+    },
+    "session_id": {
+      "type": "string",
+      "default": ""
+    },
+    "active_card": {
+      "type": "string",
+      "default": ""
+    },
+    "card_updated_at": {
+      "type": "string",
+      "default": ""
+    },
+    "ended_at": {
+      "type": "string",
+      "default": ""
     }
   },
   "rls": {

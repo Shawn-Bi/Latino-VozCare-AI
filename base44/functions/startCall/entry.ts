@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { secrets } from 'base44:runtime';
 import { errorResponse, AuthError } from "../../shared/access.ts";
 import { conversationStatus, usNumber, findAgentPhoneId, dial } from "../../shared/outboundCall.ts";
+import { agentVars } from "../../shared/agentVars.ts";
 
 // Public, token-gated call start. The patient link token is the check.
 // Limits: 3 attempts per link, one call at a time, US numbers only, consent required.
@@ -40,19 +41,21 @@ export default async function(req: Request): Promise<Response> {
     const agentPhoneId = await findAgentPhoneId();
 
     // Reserve the attempt before dialing (duplicate-request protection).
-    await base44.asServiceRole.entities.PatientLink.update(link.id, { call_attempts: (link.call_attempts || 0) + 1, call_ended_at: "" });
+    const sessionId = crypto.randomUUID();
+    await base44.asServiceRole.entities.PatientLink.update(link.id, { call_attempts: (link.call_attempts || 0) + 1, call_ended_at: "", last_call_id: "", call_session_id: sessionId, active_card: "", card_updated_at: "" });
 
     const en = packet.delivery_language === "en";
-    const conversationId = await dial(agentPhoneId, toNumber, {
-      patient_first_name: packet.patient_first_name || "",
+    const conversationId = await dial(agentPhoneId, toNumber, sessionId, agentVars({
+      firstName: packet.patient_first_name || "",
       language: packet.delivery_language || "es",
-      appointment_starts_at: packet.appointment_starts_at || "",
-      appointment_hospital: packet.appointment_hospital || "",
-      appointment_address: packet.appointment_address || "",
-      starting_address: packet.starting_address || "",
-      care_summary: (en ? packet.english : packet.spanish) || "",
-      next_steps: (en ? packet.plan_english : packet.plan_spanish) || "",
-    });
+      startsAt: packet.appointment_starts_at || "",
+      timeZone: packet.appointment_time_zone || "",
+      hospital: packet.appointment_hospital || "",
+      address: packet.appointment_address || "",
+      startingAddress: packet.starting_address || "",
+      careSummary: (en ? packet.english : packet.spanish) || "",
+      carePlan: (en ? packet.plan_english : packet.plan_spanish) || "",
+    }));
     if (conversationId === null) {
       await base44.asServiceRole.entities.PatientLink.update(link.id, { call_ended_at: new Date().toISOString() });
       throw new AuthError(502, "The call could not be started. Please try again.");

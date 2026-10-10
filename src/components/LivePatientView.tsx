@@ -3,6 +3,8 @@ import CallPanel from "./CallPanel";
 import PatientHeader from "./patient/PatientHeader";
 import CallStatusCard, { type CallState } from "./patient/CallStatusCard";
 import FullDetails from "./patient/FullDetails";
+import ConversationCard from "./patient/ConversationCard";
+import useCallCard from "./patient/useCallCard";
 import { linkErrorText } from "./patient/patientText";
 import { validatePatientLink, type PatientPacketView, type PatientLinkView } from "../lib/vozcare-api";
 import type { Language } from "../workflow";
@@ -22,6 +24,11 @@ export default function LivePatientView({ token }: { token: string }) {
       .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "error" : d.link.lastCallId ? "requested" : "none"); })
       .catch((e) => setError(e.message || ""));
   }, [token]);
+
+  const [callEnded, setCallEnded] = useState(false);
+  const { card, ended } = useCallCard(data ? { token } : null, callState === "requested" && !callEnded);
+  useEffect(() => { if (ended) setCallEnded(true); }, [ended]);
+  useEffect(() => { if (callState === "requesting") setCallEnded(false); }, [callState]);
 
   const es = language === "es";
   const shell = (body: React.ReactNode) => <main className="pv" lang={language}><div className="pv-shell"><PatientHeader language={language} setLanguage={setLanguage} />{body}</div></main>;
@@ -43,6 +50,7 @@ export default function LivePatientView({ token }: { token: string }) {
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="pv-stack">
       {tab === "conversation" ? <>
         <CallStatusCard state={callState} language={language} />
+        <ConversationCard card={card} p={p} language={language} />
         <CallPanel token={token} language={language} used={used} setUsed={setUsed} state={callState} setState={setCallState} />
         <p className="pv-meta">{es ? "Tu información guardada está siempre en Detalles completos, aunque no hagas la llamada." : "Your saved information is always in Full details, even if you don't make the call."}</p>
       </> : <FullDetails p={p} language={language} />}

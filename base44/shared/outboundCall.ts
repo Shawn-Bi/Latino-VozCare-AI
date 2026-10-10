@@ -31,7 +31,9 @@ export async function findAgentPhoneId(): Promise<string> {
 }
 
 // Places the outbound call. Returns the conversation id, or null if it failed to start.
-export async function dial(agentPhoneId: string, toNumber: string, vars: Record<string, string>): Promise<string | null> {
+// sessionId is stored on our record and sent as demo_session_id so the agent's
+// show_patient_card tool can be matched back to this call.
+export async function dial(agentPhoneId: string, toNumber: string, sessionId: string, vars: Record<string, string>): Promise<string | null> {
   const callRes = await fetch(`${EL}/twilio/outbound-call`, {
     method: "POST",
     headers: elHeaders(),
@@ -40,8 +42,7 @@ export async function dial(agentPhoneId: string, toNumber: string, vars: Record<
       agent_id: secrets.get("ELEVENLABS_AGENT_ID"),
       agent_phone_number_id: agentPhoneId,
       to_number: toNumber,
-      // The agent's tools require demo_session_id; a fresh id per call.
-      conversation_initiation_client_data: { dynamic_variables: { demo_session_id: crypto.randomUUID(), ...vars } },
+      conversation_initiation_client_data: { dynamic_variables: { ...vars, demo_session_id: sessionId } },
     }),
   });
   const result = await callRes.json().catch(() => ({}));

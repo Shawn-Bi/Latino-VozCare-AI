@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PatientHeader from "../patient/PatientHeader";
+import CallStatusCard, { type CallState } from "../patient/CallStatusCard";
+import ConversationCard from "../patient/ConversationCard";
+import useCallCard from "../patient/useCallCard";
 import FullDetails from "../patient/FullDetails";
 import DemoCallPanel from "./DemoCallPanel";
 import type { PatientPacketView } from "@/lib/vozcare-api";
@@ -11,6 +14,11 @@ type Tab = "conversation" | "details";
 export default function DemoPatientPreview({ packet, onBack }: { packet: PatientPacketView; onBack: () => void }) {
   const [language, setLanguage] = useState<Language>(packet.deliveryLanguage);
   const [tab, setTab] = useState<Tab>("conversation");
+  const [callState, setCallState] = useState<CallState>("none");
+  const [demoCallId, setDemoCallId] = useState("");
+  const [callEnded, setCallEnded] = useState(false);
+  const { card, ended } = useCallCard(demoCallId ? { demoCallId } : null, callState === "requested" && !callEnded);
+  useEffect(() => { if (ended) setCallEnded(true); }, [ended]);
   const es = language === "es";
   const tabs: [Tab, string][] = [["conversation", es ? "Conversación" : "Conversation"], ["details", es ? "Detalles completos" : "Full details"]];
   return <main className="pv" lang={language}><div className="pv-shell">
@@ -26,7 +34,11 @@ export default function DemoPatientPreview({ packet, onBack }: { packet: Patient
       {tabs.map(([id, text]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{text}</button>)}
     </div>
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="pv-stack">
-      {tab === "conversation" ? <DemoCallPanel language={language} /> : <FullDetails p={packet} language={language} />}
+      {tab === "conversation" ? <>
+        <CallStatusCard state={callState} language={language} />
+        <ConversationCard card={card} p={packet} language={language} />
+        <DemoCallPanel language={language} state={callState} setState={setCallState} onStarted={(id) => { setDemoCallId(id); setCallEnded(false); }} />
+      </> : <FullDetails p={packet} language={language} />}
     </div>
   </div></main>;
 }

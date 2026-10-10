@@ -9,7 +9,7 @@ export default function CallStatusCard({ state, language }: { state: CallState; 
   const text = {
     none: [es ? "Aún no hay llamada" : "No call yet", es ? "Cuando estés listo, pide la llamada abajo. Tú decides cuándo empieza." : "When you are ready, request the call below. You decide when it starts."],
     requesting: [es ? "Pidiendo la llamada…" : "Requesting the call…", es ? "Espera un momento." : "Please wait a moment."],
-    requested: [es ? "Llamada solicitada" : "Call requested", es ? "Tu teléfono debería sonar pronto. Contesta para hablar con VozCare. Esta página no muestra la llamada en vivo." : "Your phone should ring soon. Answer to talk with VozCare. This page does not show the call live."],
+    requested: [es ? "Llamada solicitada" : "Call requested", es ? "Tu teléfono debería sonar pronto. Contesta para hablar con VozCare. Lo que preguntes aparecerá en esta tarjeta." : "Your phone should ring soon. Answer to talk with VozCare. What you ask about will appear on this card."],
     error: [es ? "La llamada no empezó" : "Call did not start", es ? "Puedes intentarlo de nuevo si te quedan intentos. Tu información sigue en Detalles completos." : "You can try again if you have attempts left. Your information is still in Full details."],
   }[state];
   return <section className={`pv-card pv-status ${state}`} aria-live="polite">
