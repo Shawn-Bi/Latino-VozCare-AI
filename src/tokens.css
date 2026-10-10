@@ -1,0 +1,121 @@
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin-ext.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/source-sans-3-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin-ext.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Approved global tokens. Components consume semantic roles, not page-specific scales. */
+:root {
+  --font-ui: "Source Sans 3", Arial, sans-serif;
+  --font-display: "Source Serif 4", Georgia, serif;
+  --color-text: #173746;
+  --color-heading: #10384f;
+  --color-text-secondary: #506774;
+  --color-action: #174a67;
+  --color-action-hover: #10384f;
+  --color-accent: #168c87;
+  --color-link: #08736f;
+  --color-page: #f7fafc;
+  --color-surface: #ffffff;
+  --color-selected: #eaf5f8;
+  --color-border: #dbe7ec;
+  --color-control-border: #6b818d;
+  --color-focus: #08736f;
+  --color-success: #187653;
+  --color-success-surface: #e8f5ef;
+  --color-warning: #966314;
+  --color-warning-surface: #fff4dd;
+  --color-error: #aa4a43;
+  --color-error-surface: #fcedeb;
+  --text-meta: .75rem;
+  --text-label: .875rem;
+  --text-body: 1rem;
+  --text-patient: 1.125rem;
+  --text-card: 1.25rem;
+  --text-section: 1.5rem;
+  --text-page: 2rem;
+  --text-display: clamp(2.5rem, 4.5vw, 4rem);
+  --leading-heading: 1.2;
+  --leading-body: 1.6;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --radius-control: .5rem;
+  --radius-card: 1rem;
+  --radius-hero: 1.5rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 3px 16px rgb(21 62 82 / .04);
+  --shadow-floating: 0 16px 45px rgb(21 62 82 / .09);
+  --control-height: 2.75rem;
+  --control-height-patient: 3rem;
+  --layout-width: 80rem;
+  --gutter: clamp(1rem, 4vw, 3rem);
+  --motion-fast: 180ms;
+  --focus-width: 3px;
+  --focus-offset: 2px;
+  /* Existing consumers use aliases during migration, including the 3D workspace. */
+  --navy: var(--color-action);
+  --navy-deep: var(--color-heading);
+  --teal: var(--color-accent);
+  --teal-deep: var(--color-link);
+  --off-white: var(--color-page);
+  --sky: var(--color-selected);
+  --line: var(--color-border);
+  --muted: var(--color-text-secondary);
+  --green: var(--color-success);
+  --green-bg: var(--color-success-surface);
+  --amber: var(--color-warning);
+  --amber-bg: var(--color-warning-surface);
+  --red: var(--color-error);
+  --white: var(--color-surface);
+  --shadow: var(--shadow-floating);
+  --review-space-xs: var(--space-2);
+  --review-space-sm: var(--space-3);
+  --review-space-md: var(--space-6);
+  --review-space-lg: var(--space-8);
+  --review-radius: var(--radius-card);
+  --review-text-sm: var(--text-label);
+  --review-text: var(--text-body);
+  --review-title: var(--text-card);
+  --review-line-height: var(--leading-body);
+  --review-focus: var(--color-focus);
+  --model-height: 460px;
+  --review-preview-height: 900px;
+}

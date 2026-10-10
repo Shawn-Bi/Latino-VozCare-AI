@@ -1,0 +1,10 @@
+{
+  "name": "VozCare AI",
+  "description": "Synthetic-data VozCare prototype: doctor visit review and a patient companion website. Calls, SMS, and local demo access remain simulated.",
+  "site": {
+    "outputDirectory": "dist",
+    "buildCommand": "pnpm build",
+    "serveCommand": "pnpm dev",
+    "installCommand": "pnpm install --frozen-lockfile"
+  }
+}
