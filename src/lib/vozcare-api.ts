@@ -1,15 +1,14 @@
 import { base44 } from "@/api/base44Client";
 import { initialEducation, modelViews, type EducationDraft, type ModelView, type SavedDrawing } from "@/education";
 import type { Patient, Visit, Appointment, Language } from "@/workflow";
-import { DOCTOR_RECORD_ACCESS } from "@/lib/record-access";
 
-// Doctor record functions are blocked until the secure backend operation exists (see record-access.ts).
-// Patient, Visit and EducationDraft are admin-only, so these raw-entity calls must never be a doctor fallback.
-function assertRecordAccess() {
-  if (!DOCTOR_RECORD_ACCESS.available) throw new Error(DOCTOR_RECORD_ACCESS.reason);
-}
+// Doctor record functions now run as Base44-hosted backend functions. Each one
+// verifies approved CareTeamMembership and patient assignment server-side, so
+// the frontend never trusts its own role or assignment. The raw Patient/Visit/
+// EducationDraft entities are admin-only (RLS); doctors reach them only through
+// these functions, which use the service role with explicit checks.
 
-// Defense in depth only. The data layer (admin-only RLS) is what actually refuses non-admins.
+// Defense in depth only. Admin operations are still gated by admin-only RLS.
 async function requireAdmin() {
   const me = await base44.auth.me();
   if (me.role !== "admin") throw new Error("Only an admin can do this.");
@@ -132,11 +131,19 @@ async function mapDraft(d: ServerDraft): Promise<EducationDraft> {
     drawing: await loadDrawing(d),
     anatomyNotes: d.anatomy_notes ?? [],
     checks: d.checks ?? { note: false, language: false, visual: false },
-    approvedAt: null, // Final approval needs the immutable ApprovedPacket backend, which does not exist yet.
+    approvedAt: null, // Final approval needs the immutable ApprovedPacket backend, which is the next phase.
   };
 }
 
-// ─── Doctor record API (blocked until the backend operation exists) ────────
+// ─── Backend function invocation helper ───────────────────────────────────
+
+async function invokeFunction(name: string, payload: any): Promise<any> {
+  const res = await base44.functions.invoke(name, payload) as any;
+  if (res?.status >= 400) throw new Error(res.data?.error || `${name} failed.`);
+  return res?.data;
+}
+
+// ─── Doctor record API (server-side authorized) ────────────────────────────
 
 export type PatientListEntry = {
   id: string;
@@ -165,57 +172,19 @@ export type SaveResult =
   | { status: "conflict" };
 
 export async function loadAssignedPatients(): Promise<PatientListEntry[]> {
-  assertRecordAccess();
-  const patients = await base44.entities.Patient.filter({}, { sort: "-created_date", limit: 50 }) as any;
-  const patientItems = patients.items ?? patients;
-  if (patientItems.length === 0) return [];
-
-  const patientIds = patientItems.map((p: any) => p.id);
-  const [visitsPage, draftsPage] = await Promise.all([
-    base44.entities.Visit.filter({ patient_id: { $in: patientIds } }, { sort: "-created_date", limit: 200 }) as any,
-    base44.entities.EducationDraft.filter({ patient_id: { $in: patientIds } }, { sort: "-revision", limit: 200 }) as any,
-  ]);
-  const visits = visitsPage.items ?? visitsPage;
-  const drafts = draftsPage.items ?? draftsPage;
-
-  return patientItems.map((p: ServerPatient) => {
-    const v = visits.find((v: ServerVisit) => v.patient_id === p.id);
-    const d = drafts.find((d: ServerDraft) => d.patient_id === p.id);
-    return {
-      id: p.id,
-      name: p.name,
-      firstName: p.first_name,
-      initials: p.initials,
-      phone: p.phone,
-      caseKind: p.case_kind,
-      preferredLanguage: p.preferred_language,
-      draftRevision: d?.revision ?? 1,
-      appointmentStartsAt: v?.appointment_starts_at ?? "",
-      appointmentTimeZone: v?.appointment_time_zone ?? "America/New_York",
-    };
-  });
+  const data = await invokeFunction("doctorLoadPatients", {});
+  return (data.patients ?? []) as PatientListEntry[];
 }
 
 export async function loadPatientData(patientId: string): Promise<LoadedPatientData> {
-  assertRecordAccess();
-  const patient = await base44.entities.Patient.get(patientId) as ServerPatient;
-  const visits = await base44.entities.Visit.filter({ patient_id: patientId }, { sort: "-created_date", limit: 1 }) as any;
-  const visitItems = visits.items ?? visits;
-  if (visitItems.length === 0) throw new Error("No visit found for this patient.");
-  const visit = visitItems[0] as ServerVisit;
-
-  const drafts = await base44.entities.EducationDraft.filter({ patient_id: patientId }, { sort: "-revision", limit: 1 }) as any;
-  const draftItems = drafts.items ?? drafts;
-  if (draftItems.length === 0) throw new Error("No education draft found for this patient.");
-  const draft = draftItems[0] as ServerDraft;
-
+  const data = await invokeFunction("doctorLoadPatient", { patientId });
   return {
-    patient: mapPatient(patient),
-    visit: mapVisit(visit),
-    draft: await mapDraft(draft),
-    draftId: draft.id,
-    visitId: visit.id,
-    serverRevision: draft.revision,
+    patient: mapPatient(data.patient),
+    visit: mapVisit(data.visit),
+    draft: await mapDraft(data.draft),
+    draftId: data.draftId,
+    visitId: data.visitId,
+    serverRevision: data.serverRevision,
   };
 }
 
@@ -223,32 +192,26 @@ export async function loadPatientData(patientId: string): Promise<LoadedPatientD
 // The update only applies if the stored revision still equals the one this editor loaded, so a stale
 // save reports a conflict instead of overwriting another editor. Saving never marks a draft approved.
 export async function saveDraft(draftId: string, serverRevision: number, draft: EducationDraft): Promise<SaveResult> {
-  assertRecordAccess();
   const drawing = await persistDrawing(draft.drawing);
-  const revision = serverRevision + 1;
-  const result = await base44.entities.EducationDraft.updateMany(
-    { id: draftId, revision: serverRevision } as any,
-    {
-      $set: {
-        note: draft.note,
-        english: draft.english,
-        spanish: draft.spanish,
-        plan_english: draft.planEnglish,
-        plan_spanish: draft.planSpanish,
-        caption_english: draft.captionEnglish,
-        caption_spanish: draft.captionSpanish,
-        include_procedure: draft.includeProcedure,
-        delivery_language: draft.deliveryLanguage,
-        resources: draft.resources,
-        anatomy_notes: draft.anatomyNotes,
-        checks: draft.checks,
-        drawing_file_uri: drawing.fileUri,
-        drawing_view: drawing.view,
-        revision,
-      },
-    },
-  );
-  return result.updated > 0 ? { status: "saved", revision, drawingFileUri: drawing.fileUri } : { status: "conflict" };
+  const fields = {
+    note: draft.note,
+    english: draft.english,
+    spanish: draft.spanish,
+    plan_english: draft.planEnglish,
+    plan_spanish: draft.planSpanish,
+    caption_english: draft.captionEnglish,
+    caption_spanish: draft.captionSpanish,
+    include_procedure: draft.includeProcedure,
+    delivery_language: draft.deliveryLanguage,
+    resources: draft.resources,
+    anatomy_notes: draft.anatomyNotes,
+    checks: draft.checks,
+    drawing_file_uri: drawing.fileUri,
+    drawing_view: drawing.view,
+  };
+  const data = await invokeFunction("doctorSaveDraft", { draftId, serverRevision, fields });
+  if (data.status === "saved") return { status: "saved", revision: data.revision, drawingFileUri: drawing.fileUri };
+  return { status: "conflict" };
 }
 
 export async function saveContactAndAppointment(
@@ -258,14 +221,7 @@ export async function saveContactAndAppointment(
   address: string,
   appointment: { startsAt: string; endsAt: string; hospital: string; address: string },
 ): Promise<void> {
-  assertRecordAccess();
-  await base44.entities.Patient.update(patientId, { phone, address } as any);
-  await base44.entities.Visit.update(visitId, {
-    appointment_starts_at: appointment.startsAt,
-    appointment_ends_at: appointment.endsAt,
-    appointment_hospital: appointment.hospital,
-    appointment_address: appointment.address,
-  } as any);
+  await invokeFunction("doctorSaveContact", { patientId, visitId, phone, address, appointment });
 }
 
 // ─── Admin operations (explicit admins only; enforced by admin-only RLS) ───

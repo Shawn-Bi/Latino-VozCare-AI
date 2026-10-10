@@ -1,14 +1,15 @@
-// DEMO MODE: every approved doctor can read and edit every patient record.
+// Doctor record access is now enforced by Base44-hosted backend functions.
 //
-// Patient, Visit and EducationDraft are readable and editable by any authenticated app user
-// (role "user" or "admin"); creating and deleting records stays admin-only. The doctor view
-// still gates the list behind an approved CareTeamMembership, so only approved doctors see
-// records in the UI — but the data layer itself is open to all signed-in users. That is fine
-// for a synthetic-data demo and is NOT safe for real patient data: any logged-in user can read
-// or change any patient's record, not only the patients assigned to them. Before real data,
-// replace this with a Base44-hosted backend operation that checks approved membership and
-// patient assignment on every request (see docs/BASE44_HANDOFF.md) and tighten the RLS back
-// to admin-only or per-assignment.
+// Each doctor-facing data operation (list patients, load a patient, save a
+// draft, save contact details) calls a backend function that verifies an
+// approved CareTeamMembership and patient assignment on every request, using
+// the service role with explicit per-request authorization. The raw Patient,
+// Visit and EducationDraft entities are admin-only (RLS), so a signed-in doctor
+// cannot read or write them directly — the backend functions are the only path
+// in. This replaces the previous demo-wide access rules.
+//
+// Admins still manage patients, visits, drafts and memberships directly through
+// the admin-only RLS and the admin panel.
 export const DOCTOR_RECORD_ACCESS: { available: boolean; reason: string; reasonEs: string } = {
   available: true,
   reason: "",
