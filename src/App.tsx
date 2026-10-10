@@ -10,6 +10,7 @@ import { DOCTOR_RECORD_ACCESS } from "./lib/record-access";
 import RecordsLocked from "./components/RecordsLocked";
 import UnavailableNotice from "./components/UnavailableNotice";
 import AdminPanel from "./components/AdminPanel";
+import LivePatientView from "./components/LivePatientView";
 import { base44 } from "./api/base44Client";
 
 type View = "home" | "doctor" | "patient";
@@ -98,11 +99,7 @@ function GlobalNav({ view, navigate, language, setLanguage, user, onSignOut }: {
   const es = language === "es";
   return <header className="global-nav">
     <button className="brand-button" onClick={() => navigate("home")} aria-label={es ? "Inicio de VozCare AI" : "VozCare AI home"}><Logo /></button>
-    <nav aria-label={es ? "Vistas principales" : "Main views"}>
-      <button aria-current={view === "home" ? "page" : undefined} className={view === "home" ? "active" : ""} onClick={() => navigate("home")}><Icon name="home" size={17} />{es ? "Inicio" : "Home"}</button>
-      <button aria-current={view === "doctor" ? "page" : undefined} className={view === "doctor" ? "active" : ""} onClick={() => navigate("doctor")}><Icon name="doctor" size={17} />{es ? "Vista médica" : "Doctor view"}</button>
-      <button aria-current={view === "patient" ? "page" : undefined} className={view === "patient" ? "active" : ""} onClick={() => navigate("patient")}><Icon name="patient" size={17} />{es ? "Vista previa del paciente" : "Patient preview"}</button>
-    </nav>
+    <span />
     <div className="nav-actions"><div className="language-toggle" role="group" aria-label={es ? "Idioma del sitio" : "Site language"}><button type="button" lang="es" aria-label="Español" aria-pressed={es} className={es ? "active" : ""} onClick={() => setLanguage("es")}>ES</button><button type="button" lang="en" aria-label="English" aria-pressed={!es} className={!es ? "active" : ""} onClick={() => setLanguage("en")}>EN</button></div>{user && <button className="reset-button" onClick={onSignOut} aria-label={es ? "Salir" : "Sign out"}><Icon name="reset" size={16} /><span>{es ? "Salir" : "Sign out"}</span></button>}</div>
   </header>;
 }
@@ -111,6 +108,7 @@ export default function App() {
   const { isAuthenticated, isLoadingAuth, user, authError, isCareTeamApproved: isApproved, refreshMembership } = useAuth();
   const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "doctor" ? "doctor" : "home");
   const [language, setLanguage] = useState<Language>("en");
+  const [liveToken] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get("view") === "live-patient" ? q.get("token") : null; });
   const [toast, setToast] = useState("");
   const [patients, setPatients] = useState<PatientListEntry[] | null>(null);
   const [patientsError, setPatientsError] = useState("");
@@ -156,7 +154,8 @@ export default function App() {
     return () => { cancelled = true; };
   }, [selectedId, recordsOpen, refreshKey]);
 
-  const navigate = (next: View) => { setView(next); window.scrollTo({ top: 0 }); };
+  const navigate = (next: View) => { setView(isAuthenticated && next !== "patient" ? "doctor" : next); window.scrollTo({ top: 0 }); };
+  useEffect(() => { if (isAuthenticated && view === "home") setView("doctor"); }, [isAuthenticated, view]);
 
   const selectPatient = (id: string | null) => {
     selectionRef.current = { id };
@@ -235,6 +234,8 @@ export default function App() {
   };
 
   const handleProvisioned = () => { setRefreshKey((k) => k + 1); };
+
+  if (liveToken) return <LivePatientView token={liveToken} />;
 
   return <SiteLanguageContext.Provider value={language}><div className="app">
     <GlobalNav view={view} navigate={navigate} language={language} setLanguage={setLanguage} user={isAuthenticated ? user : null} onSignOut={handleSignOut} />

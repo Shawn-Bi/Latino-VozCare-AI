@@ -261,6 +261,10 @@ export async function validatePatientLink(token: string): Promise<{ packet: Pati
   return { packet: data.packet, link: data.link };
 }
 
+export async function startCall(token: string, mode: "self" | "tester", phone: string, consent: boolean): Promise<{ attemptsUsed: number }> {
+  return invokeFunction("startCall", { token, mode, phone, consent });
+}
+
 // ─── Admin operations (explicit admins only; enforced by admin-only RLS) ───
 
 export type MembershipStatus = "approved" | "pending" | "revoked" | "none";
