@@ -111,16 +111,7 @@
     "read": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.assigned_doctor_id": "{{user.id}}"
-            },
-            {
-              "user_condition": {
-                "data.care_team_approved": true
-              }
-            }
-          ]
+          "data.assigned_doctor_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -137,16 +128,7 @@
     "update": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.assigned_doctor_id": "{{user.id}}"
-            },
-            {
-              "user_condition": {
-                "data.care_team_approved": true
-              }
-            }
-          ]
+          "data.assigned_doctor_id": "{{user.id}}"
         },
         {
           "user_condition": {
