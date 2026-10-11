@@ -1,7 +1,7 @@
 import { educationResources } from "../../education";
 import type { PatientPacketView } from "../../lib/vozcare-api";
 import type { Language } from "../../workflow";
-import { CareSection, AppointmentSection, RouteSection, VisualSection, HelpSection, hasVisual } from "./DetailSections";
+import { CareSection, AppointmentSection, RouteSection, VisualSection, hasVisual } from "./DetailSections";
 
 export default function FullDetails({ p, language, demo = false }: { p: PatientPacketView; language: Language; demo?: boolean }) {
   const es = language === "es";
@@ -16,7 +16,6 @@ export default function FullDetails({ p, language, demo = false }: { p: PatientP
       <h2 id="d-read">{es ? "Lecturas revisadas" : "Reviewed reading"}</h2>
       <ul className="pv-list">{reading.map((r) => <li key={r.url}><a href={r.url} target="_blank" rel="noreferrer">{r.title}</a> <span className="pv-meta">({r.language === "Spanish" ? (es ? "español" : "Spanish") : (es ? "inglés" : "English")})</span></li>)}</ul>
     </section>}
-    <HelpSection language={language} />
     <p className="pv-meta pv-footnote">{demo ? (es ? "Vista previa ficticia. No es un paquete aprobado." : "Fictional preview. This is not an approved packet.") : (es ? "Esta es la versión que revisó tu equipo." : "This is the version your care team reviewed.")}</p>
   </div>;
 }

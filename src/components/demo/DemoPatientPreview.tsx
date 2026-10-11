@@ -24,12 +24,7 @@ export default function DemoPatientPreview({ packet, onBack }: { packet: Patient
   const tabs: [Tab, string][] = [["conversation", es ? "Conversación" : "Conversation"], ["details", es ? "Detalles completos" : "Full details"]];
   return <main className="pv" lang={language}><div className="pv-shell">
     <PatientHeader language={language} setLanguage={setLanguage} />
-    <section className="pv-card pv-status" role="note" >
-      <span className="pv-dot" aria-hidden="true" />
-      <div><h2>{es ? "Vista previa de demostración · Paciente ficticio" : "Demo preview · Fictional patient"}</h2>
-        <p>{es ? "Las llamadas son reales y usan la información ficticia de María." : "Calls are real and use María's fictional information."}</p>
-        <button type="button" className="button secondary" onClick={onBack}>{es ? "← Volver al espacio de demostración" : "← Back to demo workspace"}</button></div>
-    </section>
+    <div className="demo-preview-banner"><p className="pv-meta" role="note">{es ? "Demo · Datos ficticios · Las llamadas son reales" : "Demo · Fictional data · Calls are real"}</p><button type="button" className="button secondary" onClick={onBack}>{es ? "← Volver a la revisión" : "← Back to review"}</button></div>
     <div className="pv-intro"><p className="pv-greeting">{es ? `Hola, ${packet.firstName}.` : `Hello, ${packet.firstName}.`}</p><h1>{es ? "Tu información de seguimiento" : "Your follow-up information"}</h1></div>
     <div className="pv-tabs" role="tablist" aria-label={es ? "Secciones" : "Sections"} onKeyDown={(event) => {
       const next = event.key === "ArrowRight" || event.key === "ArrowLeft" ? (tab === "conversation" ? "details" : "conversation") : event.key === "Home" ? "conversation" : event.key === "End" ? "details" : null;

@@ -201,7 +201,8 @@ export default function App() {
   };
 
   const handleSaveContact = async (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => {
-    if (!selectedData) return;
+    if (!selectedData || writeInFlight.current) return;
+    writeInFlight.current = true;
     const selection = selectionRef.current;
     const patientId = selectedData.patient.id;
     editVersion.current++;
@@ -209,13 +210,13 @@ export default function App() {
     setApprovalState({ status: "idle" });
     setContactSaveState("saving");
     try {
-      await saveContactAndAppointment(patientId, selectedData.visitId, phone, address, appointment);
+      const result = await saveContactAndAppointment(patientId, selectedData.visitId, phone, address, appointment);
       if (selectionRef.current !== selection) return;
-      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, draft: { ...current.draft, approvedAt: null }, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
+      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, draft: { ...current.draft, approvedAt: null, revision: result.revision ?? current.draft.revision, checks: result.reviewRequired ? { note: false, visual: false, language: false } : current.draft.checks }, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
       setContactSaveState("saved");
     } catch {
       if (selectionRef.current === selection) setContactSaveState("error");
-    }
+    } finally { writeInFlight.current = false; }
   };
 
   const handleApprove = async () => {
@@ -498,7 +499,7 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
         <div role="tabpanel" id={`doctor-panel-${tab}`} aria-labelledby={`doctor-tab-${tab}`} tabIndex={0}>
           {tab === "patients" && <PatientOverview key={selectedData.patient.id} data={selectedData} onSaveContact={onSaveContact} contactSaveState={contactSaveState} review={() => setTab("care")} language={language} />}
           {tab === "care" && <>
-            <EducationReview language={language} key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} onApprove={onApprove} approvalState={approvalState} deliveryIssue={deliveryIssue ?? undefined} />
+            <EducationReview language={language} key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} appointment={selectedData.visit.appointment} startingAddress={selectedData.patient.address} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} onApprove={onApprove} approvalState={approvalState} deliveryIssue={deliveryIssue ?? undefined} />
           </>}
           {tab === "session" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Seguimiento" : "Follow-up"}</h2></div></div><UnavailableNotice title={es ? "Resultados del seguimiento" : "Follow-up results"} message={es ? "Las llamadas se solicitan desde el enlace del paciente. Aún no se muestran transcripciones ni resultados de comprensión en este espacio." : "Calls are requested from the patient link. Transcripts and understanding results are not yet shown in this workspace."} /></section>}
           {tab === "queue" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Solicitudes" : "Assistance requests"}</h2></div></div><UnavailableNotice title={es ? "Solicitudes no disponibles" : "Assistance requests are not available"} message={es ? "Las solicitudes de asistencia aún no se guardan en una cola del equipo." : "Assistance requests are not yet saved to a care-team queue."} /></section>}

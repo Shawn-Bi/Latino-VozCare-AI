@@ -1,29 +1,35 @@
 import { lazy, Suspense, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { Patient } from "./workflow";
+import FullDetails from "./components/patient/FullDetails";
+import type { PatientPacketView } from "./lib/vozcare-api";
+import type { Appointment, Patient } from "./workflow";
 import { canApproveEducation, editEducation, educationResources, type EducationDraft } from "./education";
 
 const ColonModel = lazy(() => import("./ColonModel"));
 type ApprovalState = { status: "idle" } | { status: "approving" } | { status: "approved"; token: string; expiresAt: string; linkUrl: string } | { status: "error"; message: string };
-type Props = { draft: EducationDraft; setDraft: Dispatch<SetStateAction<EducationDraft>>; patientName: string; firstName: string; caseKind: Patient["caseKind"]; onSave: () => void; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; onReload: () => void; onApprove: () => void; approvalState: ApprovalState; deliveryIssue?: string; demo?: boolean; onPreviewPatient?: () => void; language?: "en" | "es" };
+type Props = { draft: EducationDraft; setDraft: Dispatch<SetStateAction<EducationDraft>>; patientName: string; firstName: string; caseKind: Patient["caseKind"]; onSave: () => void; saveState: "idle" | "saving" | "saved" | "error" | "conflict"; onReload: () => void; onApprove: () => void; approvalState: ApprovalState; deliveryIssue?: string; demo?: boolean; onPreviewPatient?: () => void; language?: "en" | "es"; appointment?: Appointment; startingAddress?: string };
 
-function PatientPreview({ draft, patientName, caseKind, close }: { draft: EducationDraft; patientName: string; caseKind: Patient["caseKind"]; close: () => void }) {
+function PatientPreview({ draft, patientName, caseKind, appointment, startingAddress, close }: { draft: EducationDraft; patientName: string; caseKind: Patient["caseKind"]; appointment?: Appointment; startingAddress?: string; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const es = draft.deliveryLanguage === "es";
   useEffect(() => { dialog.current?.showModal(); }, []);
+  const packet: PatientPacketView = {
+    patientName, firstName: patientName.split(" ")[0], initials: "", caseKind,
+    deliveryLanguage: draft.deliveryLanguage, english: draft.english, spanish: draft.spanish,
+    planEnglish: draft.planEnglish, planSpanish: draft.planSpanish,
+    captionEnglish: draft.captionEnglish, captionSpanish: draft.captionSpanish,
+    includeProcedure: draft.includeProcedure, resources: draft.resources,
+    drawingUrl: draft.drawing?.image ?? "", drawingView: draft.drawing?.view ?? "",
+    appointment: appointment ?? { startsAt: "", endsAt: "", hospital: "", address: "", timeZone: "America/New_York" },
+    startingAddress: startingAddress ?? "", approvedAt: "",
+  };
   return <dialog ref={dialog} className="education-preview" lang={es ? "es" : "en"} onCancel={close} onClick={(event) => { if (event.target === event.currentTarget) close(); }} aria-labelledby="packet-preview-title">
     <div className="preview-heading"><div><p className="eyebrow">{es ? "BORRADOR · NO COMPARTIDO" : "DRAFT PREVIEW · NOT SHARED"}</p><h2 id="packet-preview-title">{es ? `Paquete de ${patientName} en español` : `${patientName}’s English packet`}</h2></div><button type="button" className="preview-close" onClick={close} aria-label={es ? "Cerrar vista previa" : "Close preview"}>×</button></div>
-    <div className="preview-content" lang={es ? "es" : "en"}><p className="review-case-label">{caseKind === "colon" ? (es ? "CASO FICTICIO · CÁNCER DE COLON" : "FICTIONAL CASE · COLON CANCER") : (es ? "VISITA FICTICIA DE SEGUIMIENTO" : "FICTIONAL FOLLOW-UP VISIT")}</p><h3>{es ? "Lo que hablamos en su visita" : "What we discussed at your visit"}</h3><p>{es ? draft.spanish : draft.english}</p><h3>{es ? "Próximos pasos" : "Next steps"}</h3><p>{es ? draft.planSpanish : draft.planEnglish}</p>
-      {draft.drawing && <figure><img src={draft.drawing.image} alt={es ? "Dibujo guardado sobre una vista de anatomía educativa" : "Saved drawing over an educational anatomy view"} /><figcaption>{es ? draft.captionSpanish : draft.captionEnglish}</figcaption></figure>}
-      {!draft.drawing && <div className="preview-visual-summary"><strong>{es ? "Explicación visual" : "Visual explanation"}</strong><p>{es ? draft.captionSpanish : draft.captionEnglish}</p></div>}
-      {draft.includeProcedure && <p className="review-caution">{es ? "La cirugía es una opción que se habló. No se ha elegido un tratamiento en este caso ficticio." : "Surgery is an option discussed. No treatment has been selected in this fictional case."}</p>}
-      <h3>{es ? "Lecturas revisadas" : "Reviewed reading"}</h3>{draft.resources.some((value) => value === "accepted") ? <ul>{educationResources.filter((_, index) => draft.resources[index] === "accepted").map((resource) => <li key={resource.url}><a href={resource.url} target="_blank" rel="noreferrer">{resource.title}</a> <small>({resource.language})</small></li>)}</ul> : <p>{es ? "No se han incluido enlaces." : "No links are included."}</p>}
-      <p className="preview-disclaimer">{caseKind === "colon" ? (es ? "Ilustración educativa. No es su estudio de imagen ni muestra el tamaño o la profundidad exactos del cáncer." : "Educational illustration. This is not your scan and does not show the exact size or depth of the cancer.") : (es ? "Paquete ficticio de seguimiento. No se incluye un diagnóstico ni una imagen clínica." : "Fictional follow-up packet. No diagnosis or clinical image is included.")}</p>
-    </div>
+    <div className="preview-content"><FullDetails p={packet} language={draft.deliveryLanguage} demo /></div>
     <div className="preview-actions"><span>{es ? "Solo vista previa · No se envía ningún mensaje" : "Preview only · No message is sent"}</span><button type="button" className="button secondary" onClick={close}>{es ? "Volver a la revisión" : "Back to review"}</button></div>
   </dialog>;
 }
 
-export default function EducationReview({ draft, setDraft, patientName, firstName, caseKind, onSave, saveState, onReload, onApprove, approvalState, deliveryIssue, demo = false, onPreviewPatient, language = "en" }: Props) {
+export default function EducationReview({ draft, setDraft, patientName, firstName, caseKind, onSave, saveState, onReload, onApprove, approvalState, deliveryIssue, demo = false, onPreviewPatient, language = "en", appointment, startingAddress }: Props) {
   const [textLanguage, setTextLanguage] = useState<"en" | "es">(language);
   const [step, setStep] = useState(0);
   const [preview, setPreview] = useState(false);
@@ -120,6 +126,6 @@ export default function EducationReview({ draft, setDraft, patientName, firstNam
     <div className="model-depth-navigation review-step-actions"><button type="button" disabled={step === 0} onClick={() => setStep((current) => current - 1)}>{t("← Previous section", "← Sección anterior")}</button><span>{step + 1} / 5</span><button type="button" disabled={step === 4} onClick={() => setStep((current) => current + 1)}>{t("Next section →", "Siguiente sección →")}</button></div>
     {!demo && <div className="save-bar"><span role="status">{saveState === "saving" ? t("Saving draft…", "Guardando borrador…") : saveState === "saved" ? t("Draft saved ✓", "Borrador guardado ✓") : saveState === "error" ? t("Could not save. Try again.", "No se pudo guardar. Inténtelo de nuevo.") : saveState === "conflict" ? t("Another editor changed this draft. Reload before continuing.", "Otra persona cambió el borrador. Vuelva a cargarlo antes de continuar.") : t("Changes are local until you save.", "Los cambios son locales hasta que los guarde.")}</span><button type="button" onClick={onSave} disabled={saveState === "saving" || busy}>{t("Save changes", "Guardar cambios")}</button>{saveState === "conflict" && <button type="button" className="secondary" onClick={onReload}>{t("Reload draft", "Volver a cargar")}</button>}</div>}
     {notice && <p className="review-notice" role="status">{notice}</p>}
-    {preview && <PatientPreview draft={draft} patientName={patientName} caseKind={caseKind} close={() => setPreview(false)} />}
+    {preview && <PatientPreview draft={draft} patientName={patientName} caseKind={caseKind} appointment={appointment} startingAddress={startingAddress} close={() => setPreview(false)} />}
   </div>;
 }

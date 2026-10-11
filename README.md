@@ -11,8 +11,8 @@ Reviewed React frontend for a synthetic-data care follow-up prototype.
 
 1. Sign in with Google from the doctor view (`/?view=doctor`). An admin must approve your care-team membership. The public **Try as a demo doctor** flow uses fictional browser-local records without sign-in.
 2. Doctors see assigned patients through server-authorized functions. Admin tools live in the separate admin view.
-3. Review the visit note, visual, both wording versions and reading choices. Approval saves the reviewed draft, checks its revision, snapshots its content and appointment, and creates a seven-day patient link. An older link does not approve a changed draft.
-4. The patient link opens Conversation and Full details. Calls start only when requested; the voice tool changes one conversation card. Three attempts are allowed per personal link. Public fictional demo calls have an app-wide limit of five per hour.
+3. Review the visit note, visual, both wording versions and reading choices. Approval saves the reviewed draft, checks its revision, snapshots its content and appointment, and creates a seven-day patient link. An older link does not approve a changed draft. Contact or appointment edits invalidate the review checks and advance the draft revision.
+4. The patient link opens Conversation and Full details. Calls start only when requested; the voice tool changes one conversation card. Three attempts are allowed per personal link. Each attempt is reserved with a conditional database update to prevent concurrent tabs from dialing twice. Public fictional demo calls have an app-wide limit of five per hour.
 5. Team test calls require an approved administrator on the server. SMS is not configured. Transcripts, teach-back results and assistance queues are not yet available in the doctor workspace. Use fictional data only.
 
 ## Review fixes and verification
@@ -25,7 +25,7 @@ node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs
 npm run build
 ```
 
-The backend regression checks use in-memory entities and never place calls. A live retest after sync must confirm the reviewed words, appointment, directions, education card and Full details all use the same packet. Stop before placing a live call until the tester is ready. The launch video still needs updated screenshots and removal of unverified return-to-doctor/understanding claims.
+The backend regression checks use in-memory entities and never place calls. A live retest after sync must confirm the reviewed words, appointment, directions, education card and Full details all use the same packet. Stop before placing a live call until the tester is ready. The launch video is maintained separately under the event’s video folder; confirm its render matches this release before sharing.
 
 ## Local development
 

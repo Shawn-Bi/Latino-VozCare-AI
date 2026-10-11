@@ -27,9 +27,13 @@ export default async function(req: Request): Promise<Response> {
     if (Date.parse(link.expires_at) <= Date.now()) throw new AuthError(403, "This link has expired.");
     if ((link.call_attempts || 0) >= MAX_ATTEMPTS) throw new AuthError(429, "The call limit for this link has been reached.");
 
+    if (link.call_session_id && !link.last_call_id && !link.call_ended_at) {
+      throw new AuthError(409, "A call request is already being started. Wait before trying again.");
+    }
+
     if (link.last_call_id && !link.call_ended_at) {
       const status = await conversationStatus(link.last_call_id);
-      if (status && !["done", "failed"].includes(status)) throw new AuthError(409, "The previous call has not ended yet.");
+      if (!status || !["done", "failed"].includes(status)) throw new AuthError(409, "The previous call has not ended yet.");
       await base44.asServiceRole.entities.PatientLink.update(link.id, { call_ended_at: new Date().toISOString() });
     }
 
@@ -44,9 +48,14 @@ export default async function(req: Request): Promise<Response> {
     const packet = await base44.asServiceRole.entities.ApprovedPacket.get(link.packet_id);
     const agentPhoneId = await findAgentPhoneId();
 
-    // Reserve the attempt before dialing (duplicate-request protection).
+    // Claim exactly the state we read. A concurrent request changes this state
+    // and cannot reserve the same attempt, even from another server instance.
     const sessionId = crypto.randomUUID();
-    await base44.asServiceRole.entities.PatientLink.update(link.id, { call_attempts: (link.call_attempts || 0) + 1, call_ended_at: "", last_call_id: "", call_session_id: sessionId, active_card: "", card_updated_at: "" });
+    const reservation = await base44.asServiceRole.entities.PatientLink.updateMany(
+      { id: link.id, call_attempts: link.call_attempts || 0, $or: [{ call_session_id: link.call_session_id || "" }, { call_session_id: { $exists: false } }] },
+      { $inc: { call_attempts: 1 }, $set: { call_ended_at: "", last_call_id: "", call_session_id: sessionId, active_card: "", card_updated_at: "" } }
+    );
+    if (reservation.updated !== 1) throw new AuthError(409, "Another call request is already being started. Refresh to see its status.");
 
     const en = packet.delivery_language === "en";
     const conversationId = await dial(agentPhoneId, toNumber, sessionId, agentVars({
