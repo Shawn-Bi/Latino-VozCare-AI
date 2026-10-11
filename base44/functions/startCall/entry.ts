@@ -34,7 +34,8 @@ export default async function(req: Request): Promise<Response> {
     if (link.last_call_id && !link.call_ended_at) {
       const status = await conversationStatus(link.last_call_id);
       if (!status || !["done", "failed"].includes(status)) throw new AuthError(409, "The previous call has not ended yet.");
-      await base44.asServiceRole.entities.PatientLink.update(link.id, { call_ended_at: new Date().toISOString() });
+      // Do not write an ended marker here: another request may have already
+      // reserved a new call. The conditional reservation below replaces it.
     }
 
     let toNumber: string;
