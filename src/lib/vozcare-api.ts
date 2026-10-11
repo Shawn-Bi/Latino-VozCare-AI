@@ -234,8 +234,8 @@ export async function saveContactAndAppointment(
   phone: string,
   address: string,
   appointment: { startsAt: string; endsAt: string; hospital: string; address: string },
-): Promise<void> {
-  await invokeFunction("doctorSaveContact", { patientId, visitId, phone, address, appointment });
+): Promise<{ revision?: number; reviewRequired: boolean }> {
+  return invokeFunction("doctorSaveContact", { patientId, visitId, phone, address, appointment });
 }
 
 // ─── Packet approval and patient link (server-side authorized) ────────────

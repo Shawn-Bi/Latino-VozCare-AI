@@ -30,7 +30,7 @@ export function createDemoRecords(): DemoRecord[] {
   return seeds.map((s) => ({
     patient: { id: s.id, doctorId: "demo", name: s.name, firstName: s.firstName, initials: s.initials, phone: "Demo · no phone", address: s.address, preferredLanguage: "es", caseKind: s.caseKind },
     visit: { id: `${s.id}-visit`, patientId: s.id, completedAt: "2026-10-10T16:00:00Z", appointment: s.id === "demo-maria" ? { id: `${s.id}-appt`, ...demoAppointment } : { id: `${s.id}-appt`, startsAt: `2026-10-${s.day}T${s.hour}:30:00Z`, endsAt: `2026-10-${s.day}T${s.hour + 1}:30:00Z`, timeZone: "America/New_York", hospital: "Central Community Hospital", address: "500 Demo Avenue" } },
-    draft: s.caseKind === "colon" ? { ...initialEducation } : generalDraft(s.name, s.firstName),
+    draft: s.caseKind === "colon" ? { ...initialEducation, resources: ["accepted", "accepted"] } : generalDraft(s.name, s.firstName),
   } as DemoRecord));
 }
 
@@ -48,6 +48,7 @@ export function toDemoPacket(r: DemoRecord): PatientPacketView {
 // The public demo call uses a fixed server-side scenario, not edited preview text.
 export function matchesDemoCall(packet: PatientPacketView): boolean {
   const reference = toDemoPacket(createDemoRecords()[0]);
-  return ["patientName", "firstName", "english", "spanish", "planEnglish", "planSpanish", "captionEnglish", "captionSpanish", "includeProcedure", "startingAddress", "caseKind"].every((field) => packet[field as keyof PatientPacketView] === reference[field as keyof PatientPacketView])
-    && JSON.stringify(packet.appointment) === JSON.stringify(reference.appointment);
+  return ["patientName", "firstName", "english", "spanish", "planEnglish", "planSpanish", "captionEnglish", "captionSpanish", "includeProcedure", "startingAddress", "caseKind", "drawingUrl", "drawingView"].every((field) => packet[field as keyof PatientPacketView] === reference[field as keyof PatientPacketView])
+    && JSON.stringify(packet.appointment) === JSON.stringify(reference.appointment)
+    && JSON.stringify(packet.resources) === JSON.stringify(reference.resources);
 }

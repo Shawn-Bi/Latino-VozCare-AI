@@ -111,6 +111,7 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
   const [error, setError] = useState<"" | "unavailable" | "interrupted" | "incomplete" | "load">("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedPart, setSelectedPart] = useState<AnatomyPart | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteNotice, setNoteNotice] = useState<"" | "abdomen" | "saved">("");
@@ -253,11 +254,15 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
         else moveCamera(new THREE.Vector3(1, 3, 8.5), new THREE.Vector3(), animate);
       }
     };
+    let lastWidth = 0, lastHeight = 0;
     const resize = () => {
       const { width, height } = container.getBoundingClientRect();
       // Collapsed review panels have zero dimensions. Wait for ResizeObserver to
       // report the visible canvas instead of creating a zero-aspect projection.
       if (width <= 0 || height <= 0) return;
+      // Returning from a hidden review preserves the camera and unsaved marks.
+      if (width === lastWidth && height === lastHeight) { render(); return; }
+      lastWidth = width; lastHeight = height;
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -350,7 +355,7 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
       snapshot() { stopAnimation(); render(); return renderer.domElement; },
     };
     return () => { cancelled = true; stopAnimation(); api.current = null; observer.disconnect(); controls.dispose(); if (anatomy) disposeGroup(anatomy); if (illustration) disposeGroup(illustration); renderer.domElement.removeEventListener("webglcontextlost", contextLost); renderer.domElement.removeEventListener("pointerdown", pointerDown); renderer.domElement.removeEventListener("pointerup", pointerUp); renderer.domElement.removeEventListener("pointercancel", pointerCancel); renderer.dispose(); renderer.domElement.remove(); };
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     if (!includeProcedure && view === "procedure") {
@@ -406,7 +411,12 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
 
   const disabled = drawing || loading || !!error;
   const primaryParts: AnatomyPart[] = view === "inside" ? ["lining"] : view === "layers" ? ["wall"] : selectableParts[view].filter((part) => !!deeperView(view, part));
-  const errorMessage = es ? (error === "unavailable" ? "El modelo 3D no está disponible en este navegador. La información escrita sigue disponible. Use un navegador con WebGL para revisar la imagen." : "No se pudo mostrar la anatomía. Vuelva a abrir esta vista para cargar el modelo. La información escrita sigue disponible.") : error === "unavailable" ? "3D is unavailable in this browser. Written information remains available. Use a browser with WebGL to review the visual." : error === "interrupted" ? "The 3D view was interrupted. Reopen this view to reload it." : error === "incomplete" ? "The anatomy asset is incomplete. Reopen this view to reload it." : "The reference anatomy could not load. Reopen this view to try again.";
+  const reloadModel = () => {
+    setError(""); setLoading(true); setView("body"); setSelectedPart(null); setDrawing(false); setSaved(false);
+    strokes.current = []; activeStroke.current = null; setStrokeVersion((value) => value + 1);
+    setLoadAttempt((value) => value + 1);
+  };
+  const errorMessage = es ? (error === "unavailable" ? "El modelo 3D no está disponible en este navegador. Intente cargarlo de nuevo o use un navegador con WebGL. El texto sigue disponible." : "No se pudo mostrar la anatomía. Cargue el modelo de nuevo. El texto sigue disponible.") : error === "unavailable" ? "3D is unavailable in this browser. Try reloading the model or use a browser with WebGL. Written information remains available." : "The anatomy could not be displayed. Reload the model to try again. Written information remains available.";
   const selectionNotice = noteNotice === "saved" ? (es ? "Nota guardada con esta parte y ángulo de vista." : "Note saved with this part and camera angle.") : (es ? "Esta demostración permite explorar el abdomen. Selecciónelo para ver los órganos." : "This demo supports the abdomen. Select it to reveal the organs.");
 
   return <div className="colon-model" lang={language}>
@@ -416,7 +426,7 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
       <span className="model-corner-label">{["body", "abdomen", "location"].includes(view) ? (es ? "ANATOMÍA DE REFERENCIA" : "REFERENCE ANATOMY") : (es ? "DETALLE ILUSTRATIVO" : "ILLUSTRATIVE DETAIL")}</span>
       <button ref={partMarker} type="button" className={`model-part-marker ${selectedPart ? "selected" : ""}`} style={{ visibility: "hidden" }} disabled={disabled} onClick={() => activatePart(selectedPart ?? "abdomen")} aria-label={es ? `Explorar ${partNames[selectedPart ?? "abdomen"]}` : `Explore ${partNames[selectedPart ?? "abdomen"]}`}>{partNames[selectedPart ?? "abdomen"]} →</button>
       {loading && !error && <div className="model-error" role="status">{es ? "Cargando anatomía de referencia…" : "Loading reference anatomy…"}</div>}
-      {error && <div className="model-error" role="alert">{errorMessage}</div>}
+      {error && <div className="model-error" role="alert"><div><p>{errorMessage}</p><button type="button" className="button secondary" onClick={reloadModel}>{es ? "Volver a cargar el modelo" : "Reload model"}</button></div></div>}
       {!viewOnly && drawing && <svg className="model-drawing" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label={es ? "Dibujar sobre la vista actual" : "Draw over the current model view"} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const stroke = [point(event)]; strokes.current.push(stroke); activeStroke.current = stroke; setStrokeVersion((value) => value + 1); }} onPointerMove={(event) => { if (!activeStroke.current) return; activeStroke.current.push(point(event)); setStrokeVersion((value) => value + 1); }} onPointerUp={() => { activeStroke.current = null; }} onPointerCancel={() => { activeStroke.current = null; }}>
         <g data-version={strokeVersion}>{strokes.current.map((stroke, index) => <polyline key={index} points={stroke.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--teal-deep)" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />)}</g>
       </svg>}
@@ -437,10 +447,10 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
         {selectedPart && <><div className="model-selected-heading"><strong>{partNames[selectedPart]}</strong><button type="button" disabled={disabled} onClick={() => api.current?.focus(selectedPart)}>{es ? "Enfocar parte" : "Focus part"}</button><button type="button" disabled={drawing} onClick={() => selectPart(null)}>{es ? "Borrar selección" : "Clear selection"}</button></div>{!viewOnly && <><label htmlFor="anatomy-note">{es ? "Nota del médico" : "Doctor note"} · {partNames[selectedPart]}<textarea id="anatomy-note" rows={3} placeholder={es ? "¿Qué desea explicar sobre esta parte?" : "What do you want to explain about this part?"} value={noteDrafts[noteKey] ?? ""} onChange={(event) => { setNoteDrafts((current) => ({ ...current, [noteKey]: event.target.value })); setNoteNotice(""); }} /></label><div className="drawing-tools"><button type="button" disabled={disabled || !(noteDrafts[noteKey] ?? "").trim()} onClick={saveNote}>{es ? "Guardar nota" : "Save part note"}</button><span>{es ? "Solo notas del médico · No se comparten" : "Doctor notes only · Not shared"}</span></div></>}</>}
       </div>
       {!viewOnly && !drawing && <div className="drawing-tools"><button type="button" disabled={loading || !!error} onClick={() => { setDrawing(true); api.current?.enable(false); setSaved(false); }}>{es ? "Dibujar en esta vista" : "Draw on this view"}</button></div>}
+    <p className="model-attribution">{es ? "Anatomía de referencia" : "Reference anatomy"}: <a href="https://doi.org/10.48539/HBM352.BTSQ.586" target="_blank" rel="noreferrer">Human Reference Atlas / HuBMAP</a> · <a href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">{es ? "CC BY 4.0 · Créditos" : "CC BY 4.0 · Asset credits"}</a></p>
     </details>
     {!viewOnly && drawing && <div className="drawing-tools"><button type="button" onClick={() => { setDrawing(false); api.current?.enable(true); }}>{es ? "Cancelar dibujo" : "Cancel drawing"}</button><button type="button" disabled={strokes.current.length === 0} onClick={() => { strokes.current.pop(); setStrokeVersion((value) => value + 1); }}>{es ? "Deshacer" : "Undo"}</button><button type="button" disabled={strokes.current.length === 0} onClick={save}>{es ? "Guardar dibujo" : "Save drawing"}</button></div>}
     {!viewOnly && saved && <p className="model-help" role="status">{es ? "Dibujo guardado en el borrador." : "Drawing saved to the draft."}</p>}
     {!viewOnly && notes.length > 0 && <details className="model-notes"><summary>{es ? "Notas guardadas del médico" : "Saved doctor notes"} ({notes.length})</summary>{notes.map((note) => <article key={note.id}><strong>{partNames[note.part]} <small>· {viewNames[note.view]}</small></strong><p>{note.text}</p><div className="drawing-tools"><button type="button" disabled={disabled || (note.view === "procedure" && !includeProcedure)} onClick={() => revisitNote(note)}>{es ? "Volver a esta parte" : "Return to this part"}</button><button type="button" onClick={() => onRemoveNote(note.id)}>{es ? "Eliminar nota" : "Remove note"}</button></div>{note.view === "procedure" && !includeProcedure && <small>{es ? "Habilite la explicación de cirugía para abrir esta vista." : "Enable the surgery explanation to reopen this view."}</small>}</article>)}</details>}
-    <p className="model-attribution">{es ? "Anatomía de referencia" : "Reference anatomy"}: <a href="https://doi.org/10.48539/HBM352.BTSQ.586" target="_blank" rel="noreferrer">Human Reference Atlas / HuBMAP</a> · <a href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">{es ? "CC BY 4.0 · Créditos" : "CC BY 4.0 · Asset credits"}</a></p>
   </div>;
 }

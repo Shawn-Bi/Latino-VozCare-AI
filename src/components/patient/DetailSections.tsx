@@ -36,13 +36,15 @@ export function RouteSection({ p, language }: P) {
   const es = language === "es";
   const a = p.appointment;
   const destination = [a.hospital, a.address].filter(Boolean).join(", ");
-  const mapUrl = destination ? `https://www.google.com/maps/dir/?api=1${p.startingAddress ? `&origin=${encodeURIComponent(p.startingAddress)}` : ""}&destination=${encodeURIComponent(destination)}` : "";
+  const exampleRoute = /example|demo|fictional|sample/i.test(`${p.startingAddress} ${destination}`);
+  const mapUrl = !exampleRoute && destination ? `https://www.google.com/maps/dir/?api=1${p.startingAddress ? `&origin=${encodeURIComponent(p.startingAddress)}` : ""}&destination=${encodeURIComponent(destination)}` : "";
   return <section className="pv-card" aria-labelledby="d-route">
     <h2 id="d-route">{es ? "Cómo llegar" : "Getting there"}</h2>
     <dl className="pv-dl">
       <dt>{es ? "Sales desde" : "Starting from"}</dt><dd>{p.startingAddress || missingText(es)}</dd>
       <dt>{es ? "Lugar de la cita" : "Appointment location"}</dt><dd>{destination || missingText(es)}</dd>
     </dl>
+    {exampleRoute && <p className="pv-meta">{es ? "Ruta de ejemplo con direcciones ficticias." : "Example route with fictional addresses."}</p>}
     {mapUrl && <a className="button secondary pv-link-button" href={mapUrl} target="_blank" rel="noopener noreferrer">{es ? "Abrir direcciones en Google Maps" : "Open directions in Google Maps"}</a>}
   </section>;
 }
