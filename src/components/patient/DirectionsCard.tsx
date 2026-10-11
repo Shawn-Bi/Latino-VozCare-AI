@@ -12,7 +12,7 @@ export default function DirectionsCard({ p, language, missing }: { p: PatientPac
   const [locState, setLocState] = useState<"idle" | "asking" | "denied">("idle");
   const origin = coords || p.startingAddress;
   const q = `saddr=${encodeURIComponent(origin)}&daddr=${encodeURIComponent(destination)}`;
-  const canMap = !exampleRoute && !!destination;
+  const canMap = !!destination;
 
   const useLocation = () => {
     if (!navigator.geolocation) { setLocState("denied"); return; }
@@ -30,7 +30,7 @@ export default function DirectionsCard({ p, language, missing }: { p: PatientPac
       <dt>{es ? "Sales desde" : "Starting from"}</dt><dd>{coords ? (es ? "Tu ubicación actual" : "Your current location") : p.startingAddress || missing}</dd>
       <dt>{es ? "Lugar de la cita" : "Appointment location"}</dt><dd>{destination || missing}</dd>
     </dl>
-    {exampleRoute && <p className="pv-example-route" role="note">{es ? "Ruta de ejemplo: estas direcciones son ficticias, así que no mostramos indicaciones reales." : "Example route: these addresses are fictional, so real directions are not shown."}</p>}
+    {exampleRoute && <p className="pv-example-route" role="note">{es ? "Ruta de ejemplo: estas direcciones son ficticias, así que el mapa puede no coincidir." : "Example route: these addresses are fictional, so the map may not match."}</p>}
     {canMap && <>
       <iframe className="pv-map" title={es ? "Mapa con indicaciones al hospital" : "Map with directions to the hospital"} src={`https://www.google.com/maps?${q}&output=embed`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
       <div className="pv-map-actions">
