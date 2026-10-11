@@ -1,4 +1,3 @@
-import { matchesDemoCall } from "@/demo/fixtures";
 import { useEffect, useState } from "react";
 import PatientHeader from "../patient/PatientHeader";
 import CallStatusCard, { type CallState } from "../patient/CallStatusCard";
@@ -38,7 +37,7 @@ export default function DemoPatientPreview({ packet, onBack }: { packet: Patient
       {tab === "conversation" ? <>
         <CallStatusCard state={callState} language={language} />
         <ConversationCard card={card} p={packet} language={language} />
-        {matchesDemoCall(packet) ? <DemoCallPanel language={language} state={callState} setState={setCallState} onStarted={(id) => { setDemoCallId(id); setCallEnded(false); }} /> : <section className="pv-card" role="note"><p>{es ? "Esta vista previa difiere del caso fijo de María. Para una llamada con este paquete, guarda y aprueba el paquete desde tu cuenta de médico. La llamada pública usa el caso ficticio original." : "This preview differs from the fixed María call scenario. To call with this packet, save and approve the packet from your doctor account. Public demo calls use the original fictional case."}</p></section>}
+        <DemoCallPanel language={language} state={callState} setState={setCallState} onStarted={(id) => { setDemoCallId(id); setCallEnded(false); }} />
       </> : <FullDetails demo p={packet} language={language} />}
     </div>
   </div></main>;
