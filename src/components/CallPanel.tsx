@@ -32,7 +32,7 @@ export default function CallPanel({ token, language, used, setUsed, state, setSt
 
   if (state === "requesting" || state === "requested") return null;
 
-  return <section className="pv-card" aria-labelledby="call-setup-title">
+  return <section className="pv-card pv-call-setup" aria-labelledby="call-setup-title">
     <h2 id="call-setup-title">{es ? "Pide tu llamada" : "Request your call"}</h2>
     <label className="pv-field" htmlFor="pv-phone">{es ? "Tu número de teléfono de EE. UU." : "Your US phone number"}</label>
     <input id="pv-phone" className="pv-input" type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 123-4567" aria-describedby="pv-phone-help" value={phone} onChange={(e) => setPhone(e.target.value)} />

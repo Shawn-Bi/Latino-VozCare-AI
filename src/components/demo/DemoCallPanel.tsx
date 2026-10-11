@@ -28,7 +28,7 @@ export default function DemoCallPanel({ language, state, setState, onStarted }: 
 
   if (state === "requesting" || state === "requested") return null;
 
-  return <section className="pv-card" aria-labelledby="demo-call-title">
+  return <section className="pv-card pv-call-setup" aria-labelledby="demo-call-title">
     <h2 id="demo-call-title">{es ? "Pide tu llamada" : "Request your call"}</h2>
     <label className="pv-field" htmlFor="demo-phone">{es ? "Tu número de teléfono de EE. UU." : "Your US phone number"}</label>
     <input id="demo-phone" className="pv-input" type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} />

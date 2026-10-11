@@ -7,7 +7,7 @@ export type CallState = "none" | "requesting" | "requested" | "ended" | "error";
 export default function CallStatusCard({ state, language }: { state: CallState; language: Language }) {
   const es = language === "es";
   const text = {
-    none: [es ? "Aún no hay llamada" : "No call yet", es ? "Cuando estés listo, pide la llamada abajo. Tú decides cuándo empieza." : "When you are ready, request the call below. You decide when it starts."],
+    none: [es ? "Aún no hay llamada" : "No call yet", es ? "Cuando estés listo, solicita la llamada. Tú decides cuándo empieza." : "When you are ready, request your call. You decide when it starts."],
     requesting: [es ? "Pidiendo la llamada…" : "Requesting the call…", es ? "Espera un momento." : "Please wait a moment."],
     requested: [es ? "Llamada solicitada" : "Call requested", es ? "Tu teléfono debería sonar pronto. Contesta para hablar con VozCare. Lo que preguntes aparecerá en esta tarjeta." : "Your phone should ring soon. Answer to talk with VozCare. What you ask about will appear on this card."],
     ended: [es ? "Llamada terminada" : "Call ended", es ? "Revisa lo que hablamos en Detalles completos. Puedes pedir otra llamada si quedan intentos." : "Review what we discussed in Full details. You can request another call if attempts remain."],
