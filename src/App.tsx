@@ -212,7 +212,7 @@ export default function App() {
     try {
       const result = await saveContactAndAppointment(patientId, selectedData.visitId, phone, address, appointment);
       if (selectionRef.current !== selection) return;
-      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, draft: { ...current.draft, approvedAt: null, revision: result.revision ?? current.draft.revision, checks: result.reviewRequired ? { note: false, visual: false, language: false } : current.draft.checks }, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
+      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, serverRevision: result.revision ?? current.serverRevision, draft: { ...current.draft, approvedAt: null, revision: result.revision ?? current.draft.revision, checks: result.reviewRequired ? { note: false, visual: false, language: false } : current.draft.checks }, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
       setContactSaveState("saved");
     } catch {
       if (selectionRef.current === selection) setContactSaveState("error");
