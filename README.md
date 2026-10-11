@@ -1,23 +1,57 @@
 # VozCare AI
 
-Fictional-data care follow-up demo with a React frontend, Base44 backend, and live ElevenLabs/Twilio calls.
+Care follow-up that stays with the patient.
 
-- Hosted prototype: https://vozcare.base44.app
-- Base44 dashboard: https://app.base44.com/apps/6aca7bb397b1030686eef3a2/editor/workspace/overview
-- Current implementation and operations: [Base44 handoff](docs/BASE44_HANDOFF.md)
-- Earlier team planning documents: [PRD v2](VozCare_PRD_v2_EN.md) and [README v2](VozCare_README_v2_EN.md). These documents are preserved; their delivery flow and integration status differ from the current frontend described below.
+VozCare is a hackathon demo that helps patients revisit what they discussed with their doctor through an English or Spanish phone conversation and a companion website. As patients ask questions, the website shows their reviewed care information, appointment calendar, directions, or visual explanation.
 
-## Current status
+**[Try the live demo](https://vozcare.base44.app/)**
 
-1. Sign in with Google from the doctor view (`/?view=doctor`). An admin must approve your care-team membership. The public **Try as a demo doctor** flow uses fictional browser-local records without sign-in.
-2. Doctors see assigned patients through server-authorized functions. Admin tools live in the separate admin view.
-3. Review the visit note, visual, both wording versions and reading choices. Approval saves the reviewed draft, checks its revision, snapshots its content and appointment, and creates a seven-day patient link. An older link does not approve a changed draft. Contact or appointment edits invalidate the review checks and advance the draft revision.
-4. The patient link opens Conversation and Full details. Calls start only when requested; the voice tool changes one conversation card. Three attempts are allowed per personal link. Each attempt is reserved with a conditional database update to prevent concurrent tabs from dialing twice. Public fictional demo calls have an app-wide limit of five per hour.
-5. Team test calls require an approved administrator on the server. SMS is not configured. Transcripts, teach-back results and assistance queues are not yet available in the doctor workspace. Use fictional data only.
+The demo uses fictional clinical information and is not intended for clinical use.
 
-## Review fixes and verification
+## Why VozCare
 
-Changes should be reviewed in a PR before merging to the connected `main` branch. GitHub sync updates Base44's editor; verify sync and publication separately. Do not deploy this GitHub-connected app directly through CLI.
+Questions often come up after a patient leaves a visit. VozCare gives patients a way to review their care in English or Spanish, while doctors review the information before it is shared.
+
+## What it does
+
+- Gives doctors a patient workspace for reviewing visit notes and education packets.
+- Supports English and Spanish patient wording.
+- Creates personal links to doctor-approved care information.
+- Connects real phone conversations to an appointment calendar, Google Maps directions, care instructions, and illustrative anatomy views.
+- Keeps the reviewed information available in a separate **Full details** tab.
+
+## How it works
+
+1. A doctor selects a patient and reviews the visit education.
+2. The doctor approves the packet and copies its personal link.
+3. The patient opens the link and requests a follow-up call.
+4. Questions about appointments, directions, care, or education open the matching information on the website.
+5. The patient can revisit the saved packet in **Full details** after the call.
+
+To explore without an account, select **Try as a demo doctor** on the homepage. The demo uses fictional clinical information. Requesting a call sends the number you enter to the calling services and places a real call. Use your own number.
+
+## Technology
+
+| Area | Tools |
+| --- | --- |
+| Frontend | React, TypeScript, Vite |
+| Authentication, data and backend | Base44 |
+| Voice agent and phone calls | ElevenLabs and Twilio |
+| Anatomy visualization | Three.js |
+| Directions | Google Maps |
+
+## Run locally
+
+Use Node.js 24 and npm:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open http://127.0.0.1:5174. This starts the frontend; it does not provision a Base44 backend, voice agent, or calling number. The checked-in client points to the existing VozCare Base44 app. Clones must configure their own app and services; frontend installation does not grant access to doctor records. See the [implementation handoff](docs/BASE44_HANDOFF.md) for setup and verification details.
+
+## Verify locally
 
 ```sh
 npx tsc --noEmit
@@ -25,37 +59,20 @@ node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs
 npm run build
 ```
 
-The backend regression checks use in-memory entities and never place calls. Dennis confirmed completing a live test on October 11, 2026. This is user-reported verification, not a new agent-run call or proof that every failure case was tested. Repeat the relevant live checks after future voice or integration changes, with the tester ready. The launch video is a separate asset; no video update is part of this documentation closeout.
+These checks do not place phone calls or verify the live provider configuration.
 
-## Local development
+## Current limits
 
-Use Node.js 24 and npm. `package-lock.json` is the only lockfile.
+- This is a hackathon demo using fictional clinical information, not a production healthcare service.
+- Calls support US numbers and are subject to usage limits.
+- Links are shared manually; SMS is not configured.
+- Doctor transcripts, teach-back reporting, and assistance queues are not implemented.
+- The anatomy model is illustrative. It is not a patient scan and does not establish tumor size, depth, or stage.
 
-```sh
-npm ci
-npm run dev
-```
+## Documentation and credits
 
-The frontend development server uses http://127.0.0.1:5174.
+- [Implementation and operations](docs/BASE44_HANDOFF.md)
+- [Original project brief](VozCare_PRD_v2_EN.md) — historical planning; some proposed features are not implemented.
+- [Anatomy sources and attribution](public/models/ATTRIBUTION.md)
 
-```sh
-npx tsc --noEmit
-node --experimental-strip-types --test tests/workflow.test.ts
-npm run build
-```
-
-## Base44 editor connection
-
-The default branch must be `main`, and `base44/config.jsonc` must name the app `VozCare AI`. The repository owner must install the Base44 GitHub App with write access to this repository. The Base44 app owner can then use **Overview → Link GitHub repo** to connect it.
-
-After linking, GitHub becomes the source of truth. Continue through the Base44 editor and its GitHub sync; stop using direct CLI deployment for this app. Base44 lists GitHub two-way sync as requiring the Builder plan or higher.
-
-Private design notes, credentials, environment files, browser storage, and verification screenshots are excluded from this repository. Provider credentials are configured as Base44 server secrets; never put their values in this repository.
-
-## Assets
-
-Preserve the shared design tokens, Source Serif 4 and Source Sans 3 fonts and their licenses, both photos, and the anatomy assets. See [anatomy attribution](public/models/ATTRIBUTION.md).
-
-## Patient experience
-
-Appointment cards show a calendar with the saved date highlighted. Directions use Google Maps with the saved origin and hospital, or the device location after the patient requests it and grants permission. Fictional addresses carry an example-route notice. The patient visual uses a simplified anatomy presentation, separate from doctor editing controls; it does not establish tumor size, depth, or stage. Conversation and Full details remain separate tabs. Call setup is hidden during an active call and returns after it ends.
+The interface uses Source Sans 3 and Source Serif 4; their license files are included with the font assets.
