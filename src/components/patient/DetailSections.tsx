@@ -9,12 +9,13 @@ const missingText = (es: boolean) => es ? "Tu equipo aún no guardó esta inform
 
 export function CareSection({ p, language }: P) {
   const es = language === "es";
-  return <section className="pv-card" aria-labelledby="d-care">
-    <h2 id="d-care">{es ? "Lo que hablamos en tu visita" : "What we discussed at your visit"}</h2>
+  return <section className="pv-card pv-care-summary" aria-labelledby="d-care">
+    <div><h2 id="d-care">{es ? "Lo que hablamos en tu visita" : "What we discussed at your visit"}</h2>
     <p>{(es ? p.spanish : p.english) || missingText(es)}</p>
-    <h3>{es ? "Próximos pasos" : "Next steps"}</h3>
+    </div><div><h3>{es ? "Próximos pasos" : "Next steps"}</h3>
     <p>{(es ? p.planSpanish : p.planEnglish) || missingText(es)}</p>
     {p.includeProcedure && <p>{es ? "La cirugía es una opción que se habló; no es una decisión de tratamiento." : "Surgery is an option discussed; this does not select a treatment."}</p>}
+    </div>
   </section>;
 }
 

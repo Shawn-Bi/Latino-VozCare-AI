@@ -7,7 +7,7 @@ export default function FullDetails({ p, language, demo = false }: { p: PatientP
   const es = language === "es";
   const reading = educationResources.filter((_, i) => p.resources[i] === "accepted").sort((a, b) => Number(b.language === (es ? "Spanish" : "English")) - Number(a.language === (es ? "Spanish" : "English")));
 
-  return <div className="pv-stack">
+  return <div className="pv-stack pv-details-layout">
     <CareSection p={p} language={language} />
     <AppointmentSection p={p} language={language} />
     <RouteSection p={p} language={language} />

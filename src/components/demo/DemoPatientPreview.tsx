@@ -34,7 +34,7 @@ export default function DemoPatientPreview({ packet, onBack }: { packet: Patient
     }}>
       {tabs.map(([id, text]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{text}</button>)}
     </div>
-    <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="pv-stack">
+    <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={tab === "conversation" ? "pv-stack pv-conversation-layout" : "pv-stack"}>
       {tab === "conversation" ? <>
         <CallStatusCard state={callState} language={language} />
         <ConversationCard card={card} p={packet} language={language} />

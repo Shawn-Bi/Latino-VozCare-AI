@@ -146,13 +146,17 @@ export default function App() {
     if (!selectedId || !recordsOpen) return;
     let cancelled = false;
     loadPatientData(selectedId)
-      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setApprovalState({ status: "idle" }); setDraftSaveState("idle"); setContactSaveState("idle");
-        const editsAtLoad = editVersion.current;
-        getExistingPatientLink(data.patient.id, data.visitId, data.draftId, data.serverRevision).then((l) => {
-          if (cancelled || !l?.matchesCurrentDraft || editVersion.current !== editsAtLoad) return;
-          setApprovalState({ status: "approved", token: l.token, expiresAt: l.expiresAt, linkUrl: `${window.location.origin}/?view=live-patient&token=${l.token}` });
-          setSelectedData((current) => current?.patient.id === data.patient.id ? { ...current, draft: { ...current.draft, approvedAt: l.approvedAt } } : current);
-        }).catch(() => {}); })
+      .then(async (data) => {
+        if (cancelled) return;
+        if ("empty" in data) { setSelectedEmpty(data.patient); return; }
+        // Resolve approval before mounting the review so its language default cannot alter an approved packet.
+        const link = await getExistingPatientLink(data.patient.id, data.visitId, data.draftId, data.serverRevision).catch(() => null);
+        if (cancelled) return;
+        const approved = link?.matchesCurrentDraft;
+        setSelectedData(approved ? { ...data, draft: { ...data.draft, approvedAt: link.approvedAt } } : data);
+        setApprovalState(approved ? { status: "approved", token: link.token, expiresAt: link.expiresAt, linkUrl: `${window.location.origin}/?view=live-patient&token=${link.token}` } : { status: "idle" });
+        setDraftSaveState("idle"); setContactSaveState("idle");
+      })
       .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); });
     return () => { cancelled = true; };
   }, [selectedId, recordsOpen, refreshKey]);
