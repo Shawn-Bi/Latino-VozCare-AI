@@ -3,7 +3,7 @@ export const demoAppointment = {
   startsAt: "2026-10-12T14:30:00Z", endsAt: "2026-10-12T15:30:00Z",
   timeZone: "America/New_York", hospital: "Bellevue Hospital", address: "462 First Avenue, New York, NY 10016",
 };
-export const demoStartingAddress = "230 East 21st Street, New York, NY 10010";
+export const demoStartingAddress = "301 Gold Street, Brooklyn, NY 11201";
 export const demoEducation = {
   note: "FICTIONAL DEMO NOTE · October 10, 2026\n\nSigmoid colon biopsy reports adenocarcinoma. Depth of invasion and final stage have not been established in this sample record.\n\nDiscussed the location of the colon and the purpose of further evaluation. Removal of the affected colon segment was discussed as a possible treatment, pending staging and specialist review. No treatment decision or medication change is recorded.\n\nFollow-up: October 12, 2026 at 10:30 AM, Bellevue Hospital. Patient prefers Spanish. Bring questions to the care team.",
   english: "Your sample biopsy report found cancer in the sigmoid colon, a part of the large intestine. This illustration helps explain where the colon is and how its wall is arranged. It does not show the exact size or depth of your cancer. The stage is still pending in this fictional record.",
