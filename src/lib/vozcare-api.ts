@@ -131,7 +131,7 @@ async function mapDraft(d: ServerDraft): Promise<EducationDraft> {
     drawing: await loadDrawing(d),
     anatomyNotes: d.anatomy_notes ?? [],
     checks: d.checks ?? { note: false, language: false, visual: false },
-    approvedAt: null, // Final approval needs the immutable ApprovedPacket backend, which is the next phase.
+    approvedAt: null, // Populated only when the active packet matches this saved draft.
   };
 }
 
@@ -240,15 +240,15 @@ export async function saveContactAndAppointment(
 
 // ─── Packet approval and patient link (server-side authorized) ────────────
 
-export type ApprovalResult = { packetId: string; token: string; expiresAt: string };
+export type ApprovalResult = { packetId: string; token: string; expiresAt: string; approvedAt: string };
 
 export async function approvePacket(patientId: string, visitId: string, draftId: string, serverRevision: number): Promise<ApprovalResult> {
   const data = await invokeFunction("approvePacket", { patientId, visitId, draftId, serverRevision });
-  return { packetId: data.packetId, token: data.token, expiresAt: data.expiresAt };
+  return { packetId: data.packetId, token: data.token, expiresAt: data.expiresAt, approvedAt: data.approvedAt };
 }
 
-export async function getExistingPatientLink(patientId: string): Promise<{ token: string; expiresAt: string } | null> {
-  const data = await invokeFunction("doctorGetPatientLink", { patientId });
+export async function getExistingPatientLink(patientId: string, visitId: string, draftId: string, serverRevision: number): Promise<{ token: string; expiresAt: string; matchesCurrentDraft: boolean; approvedAt: string } | null> {
+  const data = await invokeFunction("doctorGetPatientLink", { patientId, visitId, draftId, serverRevision });
   return data.link ?? null;
 }
 

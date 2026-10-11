@@ -955,3 +955,13 @@ h1, h2, h3 { font-weight: var(--weight-semibold); }
   .cell-label { display: block; color: var(--muted); font-size: 12px; font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: .04em; }
   .patient-search { max-width: none; }
 }
+/* Review steps share the existing clinical task scale and semantic states. */
+.education-workspace > [hidden] { display: none; }
+.review-step-nav, .review-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.review-step-nav { margin-bottom: var(--space-6); }
+.review-step-nav button { flex: 1; }
+.review-step-actions { align-items: center; margin-top: var(--space-6); }
+.resource-accepted { border-color: var(--color-success); }
+.resource-rejected { border-color: var(--color-error); }
+.visit-note-summary { white-space: pre-line; }
+.pv-status + .pv-intro { margin-top: var(--space-6); }

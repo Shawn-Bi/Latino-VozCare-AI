@@ -1,3 +1,4 @@
+import { packetMatchesReview } from "../../shared/packetReview.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { requireApprovedDoctor, errorResponse } from "../../shared/access.ts";
 
@@ -23,9 +24,9 @@ export default async function(req: Request): Promise<Response> {
     const ids = { $in: patients.map((p: any) => p.id) };
     const [visitsPage, draftsPage, packetsPage, linksPage] = await Promise.all([
       base44.asServiceRole.entities.Visit.filter({ patient_id: ids }, { sort: "-created_date", limit: 200 }),
-      base44.asServiceRole.entities.EducationDraft.filter({ patient_id: ids }, { sort: "-revision", limit: 200, fields: ["patient_id", "revision"] }),
-      base44.asServiceRole.entities.ApprovedPacket.filter({ patient_id: ids }, { sort: "-created_date", limit: 200, fields: ["patient_id"] }),
-      base44.asServiceRole.entities.PatientLink.filter({ patient_id: ids }, { sort: "-created_date", limit: 200, fields: ["patient_id", "call_attempts"] }),
+      base44.asServiceRole.entities.EducationDraft.filter({ patient_id: ids }, { sort: "-revision", limit: 200 }),
+      base44.asServiceRole.entities.ApprovedPacket.filter({ patient_id: ids }, { sort: "-created_date", limit: 200 }),
+      base44.asServiceRole.entities.PatientLink.filter({ patient_id: ids }, { sort: "-created_date", limit: 200 }),
     ]);
     const visits = visitsPage.items ?? visitsPage;
     const drafts = draftsPage.items ?? draftsPage;
@@ -34,9 +35,10 @@ export default async function(req: Request): Promise<Response> {
 
     const result = patients.map((p: any) => {
       const v = visits.find((x: any) => x.patient_id === p.id);
-      const d = drafts.find((x: any) => x.patient_id === p.id);
-      const approved = packets.some((x: any) => x.patient_id === p.id);
-      const link = links.find((x: any) => x.patient_id === p.id);
+      const d = drafts.find((x: any) => x.patient_id === p.id && x.visit_id === v?.id);
+      const packet = packets.find((x: any) => packetMatchesReview(x, d, v, p));
+      const approved = !!packet;
+      const link = packet ? links.find((x: any) => x.patient_id === p.id && x.packet_id === packet.id && !x.revoked_at && Date.parse(x.expires_at) > Date.now()) : null;
       return {
         id: p.id,
         name: p.name,

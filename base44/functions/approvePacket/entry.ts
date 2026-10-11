@@ -29,13 +29,22 @@ export default async function(req: Request): Promise<Response> {
     } catch {
       throw new AuthError(404, "Draft not found for this patient.");
     }
-    if (!draft || draft.patient_id !== patientId) throw new AuthError(404, "Draft not found for this patient.");
+    if (!draft || draft.patient_id !== patientId || draft.visit_id !== visitId) throw new AuthError(404, "Draft not found for this patient.");
     if (draft.revision !== serverRevision) throw new AuthError(409, "The draft changed since you loaded it. Reload and review again.");
 
     // All review checks must pass.
     const checks = draft.checks || {};
     if (!(checks.note && checks.language && checks.visual)) {
       throw new AuthError(400, "Complete all three review checks before approving.");
+    }
+
+    const resources = draft.resources || [];
+    if (!Array.isArray(resources) || (patient.case_kind === "colon" && resources.length !== 2) || resources.some((decision: string) => !["accepted", "rejected"].includes(decision))) {
+      throw new AuthError(400, "Review every reading link before approving.");
+    }
+    const wording = [draft.note, draft.english, draft.spanish, draft.plan_english, draft.plan_spanish, draft.caption_english, draft.caption_spanish];
+    if (wording.some((value) => typeof value !== "string" || !value.trim())) {
+      throw new AuthError(400, "Complete the visit note and both language versions before approving.");
     }
 
     // Delivery details must be complete.
@@ -102,7 +111,7 @@ export default async function(req: Request): Promise<Response> {
       call_ended_at: "",
     });
 
-    return Response.json({ packetId: packet.id, token, expiresAt });
+    return Response.json({ packetId: packet.id, token, expiresAt, approvedAt: now });
   } catch (error) {
     return errorResponse(error);
   }

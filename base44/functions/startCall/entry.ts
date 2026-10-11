@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { secrets } from 'base44:runtime';
-import { errorResponse, AuthError } from "../../shared/access.ts";
+import { requireApprovedDoctor, errorResponse, AuthError } from "../../shared/access.ts";
 import { conversationStatus, usNumber, findAgentPhoneId, dial } from "../../shared/outboundCall.ts";
 import { agentVars } from "../../shared/agentVars.ts";
 
@@ -14,6 +14,10 @@ export default async function(req: Request): Promise<Response> {
     const body = await req.json();
     const token = body?.token;
     const mode = body?.mode === "tester" ? "tester" : "self";
+    if (mode === "tester") {
+      const user = await requireApprovedDoctor(base44);
+      if (user.role !== "admin") throw new AuthError(403, "Team test calls require an administrator.");
+    }
     if (!token || typeof token !== "string") throw new AuthError(400, "A link token is required.");
 
     const page = await base44.asServiceRole.entities.PatientLink.filter({ token }, { limit: 1 });

@@ -7,20 +7,25 @@ export default function useCallCard(query: { token?: string; demoCallId?: string
   const [ended, setEnded] = useState(false);
   const key = query?.token || query?.demoCallId || "";
 
+  useEffect(() => { setCard(""); setEnded(false); }, [key]);
   useEffect(() => {
     if (!key) return;
     let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const expiresAt = Date.now() + 15 * 60 * 1000;
     const load = async () => {
       const res = await base44.functions.invoke("getCallCard", query ?? {}).catch(() => null);
-      if (stop || !res?.data) return;
-      setCard(res.data.card || "");
-      setEnded(!!res.data.ended);
+      if (stop) return;
+      if (res?.data) {
+        setCard(res.data.card || "");
+        setEnded(!!res.data.ended);
+      }
+      // Schedule only after the previous request completes; slow provider reads
+      // cannot return out of order and put an older card back on screen.
+      if (active && !res?.data?.ended && Date.now() < expiresAt) timer = setTimeout(load, 3000);
     };
     load();
-    if (!active) return () => { stop = true; };
-    const id = setInterval(load, 3000);
-    const timeout = setTimeout(() => clearInterval(id), 15 * 60 * 1000);
-    return () => { stop = true; clearInterval(id); clearTimeout(timeout); };
+    return () => { stop = true; clearTimeout(timer); };
   }, [key, active]);
 
   return { card, ended };

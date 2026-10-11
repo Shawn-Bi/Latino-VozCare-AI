@@ -2,18 +2,30 @@
 
 Reviewed React frontend for a synthetic-data care follow-up prototype.
 
-- Hosted prototype: https://voz-care-ai-86eef3a2.base44.app
+- Hosted prototype: https://vozcare.base44.app
 - Base44 dashboard: https://app.base44.com/apps/6aca7bb397b1030686eef3a2/editor/workspace/overview
 - Implementation and backend contracts: [Base44 handoff](docs/BASE44_HANDOFF.md)
 - Earlier team planning documents: [PRD v2](VozCare_PRD_v2_EN.md) and [README v2](VozCare_README_v2_EN.md). These documents are preserved; their delivery flow and integration status differ from the current frontend described below.
 
 ## Current status
 
-1. Sign in with Google from the doctor view (`/?view=doctor`). An admin must approve your care-team membership.
-2. Admins approve memberships and can create synthetic demo patients from the doctor view, even before approving their own membership. Nothing is approved automatically.
-3. Patient, visit and education-draft data is admin-only. Doctors cannot open patient records until a Base44-hosted backend operation exists; it needs the Builder plan or higher. See the [handoff](docs/BASE44_HANDOFF.md) for the required checks.
-4. Once records are available, doctors review and save a bilingual education draft, including a saved drawing. Every save advances the draft revision, and a stale save reports a conflict.
-5. Final approval, immutable approved packets, personal patient links, SMS, calls, and live maps are not built or connected. Use fictional data only.
+1. Sign in with Google from the doctor view (`/?view=doctor`). An admin must approve your care-team membership. The public **Try as a demo doctor** flow uses fictional browser-local records without sign-in.
+2. Doctors see assigned patients through server-authorized functions. Admin tools live in the separate admin view.
+3. Review the visit note, visual, both wording versions and reading choices. Approval saves the reviewed draft, checks its revision, snapshots its content and appointment, and creates a seven-day patient link. An older link does not approve a changed draft.
+4. The patient link opens Conversation and Full details. Calls start only when requested; the voice tool changes one conversation card. Three attempts are allowed per personal link. Public fictional demo calls have an app-wide limit of five per hour.
+5. Team test calls require an approved administrator on the server. SMS is not configured. Transcripts, teach-back results and assistance queues are not yet available in the doctor workspace. Use fictional data only.
+
+## Review fixes and verification
+
+Changes should be reviewed in a PR before merging to the connected `main` branch. GitHub sync updates Base44's editor; verify sync and publication separately. Do not deploy this GitHub-connected app directly through CLI.
+
+```sh
+npx tsc --noEmit
+node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs
+npm run build
+```
+
+The backend regression checks use in-memory entities and never place calls. A live retest after sync must confirm the reviewed words, appointment, directions, education card and Full details all use the same packet. Stop before placing a live call until the tester is ready. The launch video still needs updated screenshots and removal of unverified return-to-doctor/understanding claims.
 
 ## Local development
 
