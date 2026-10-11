@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 
 // Polls the card the voice agent last showed while a call is active. Real tool events only.
@@ -7,7 +7,13 @@ export default function useCallCard(query: { token?: string; demoCallId?: string
   const [ended, setEnded] = useState(false);
   const key = query?.token || query?.demoCallId || "";
 
-  useEffect(() => { setCard(""); setEnded(false); }, [key]);
+  // Keep the last card on screen across a new call request; reset only for a different call.
+  const lastKey = useRef("");
+  useEffect(() => {
+    if (!key) return;
+    if (lastKey.current && lastKey.current !== key) setCard("");
+    lastKey.current = key; setEnded(false);
+  }, [key]);
   useEffect(() => {
     if (!key) return;
     let stop = false;

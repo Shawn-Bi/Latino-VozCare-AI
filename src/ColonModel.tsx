@@ -85,9 +85,12 @@ function disposeGroup(group: THREE.Group) {
   });
 }
 
-type Props = { language?: "en" | "es"; includeProcedure: boolean; onSaveDrawing?: (drawing: SavedDrawing) => void; notes?: AnatomyNote[]; onSaveNote?: (note: AnatomyNote) => void; onRemoveNote?: (id: string) => void; viewOnly?: boolean };
+type Props = { language?: "en" | "es"; includeProcedure: boolean; onSaveDrawing?: (drawing: SavedDrawing) => void; notes?: AnatomyNote[]; onSaveNote?: (note: AnatomyNote) => void; onRemoveNote?: (id: string) => void; viewOnly?: boolean; caption?: string };
 
-export default function ColonModel({ includeProcedure, onSaveDrawing = () => {}, notes = [], onSaveNote = () => {}, onRemoveNote = () => {}, viewOnly = false, language = "en" }: Props) {
+const tourViews: ModelView[] = ["abdomen", "location", "inside"];
+const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export default function ColonModel({ includeProcedure, onSaveDrawing = () => {}, notes = [], onSaveNote = () => {}, onRemoveNote = () => {}, viewOnly = false, language = "en", caption = "" }: Props) {
   const es = language === "es";
   const partNames: Record<AnatomyPart, string> = es ? { abdomen: "Abdomen", colon: "Colon", sigmoid: "Colon sigmoide", smallIntestine: "Intestino delgado", liver: "Hígado", lining: "Revestimiento interior", growth: "Crecimiento de ejemplo", wall: "Pared del colon" } : anatomyParts;
   const viewNames: Record<ModelView, string> = es ? { body: "Cuerpo", abdomen: "Abdomen", location: "Colon", inside: "Interior", layers: "Capas de la pared", procedure: "Posible cirugía" } : { body: "Body", abdomen: "Abdomen", location: "Colon", inside: "Inside", layers: "Wall layers", procedure: "Surgery discussion" };
@@ -318,7 +321,7 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
     const raycaster = new THREE.Raycaster();
     const pointerDown = (event: globalThis.PointerEvent) => { pointerStart = { x: event.clientX, y: event.clientY }; };
     const pointerUp = (event: globalThis.PointerEvent) => {
-      if (!pointerStart || !controls.enabled || animation || !anatomy || event.button !== 0) { pointerStart = null; return; }
+      if (viewOnly || !pointerStart || !controls.enabled || animation || !anatomy || event.button !== 0) { pointerStart = null; return; }
       const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
       pointerStart = null;
       if (distance > 6) return;
@@ -367,6 +370,21 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
   useEffect(() => {
     host.current?.querySelector("canvas")?.setAttribute("aria-label", es ? "Modelo educativo de anatomía. Seleccione el abdomen o una parte compatible para explorar más; arrastre para girar." : "Educational anatomy model. Select the abdomen or a supported part to explore deeper; drag to rotate.");
   }, [es, loading]);
+
+  // Patient presentation: abdomen → colon → close-up, auto-advancing unless reduced motion is preferred.
+  const [tourStep, setTourStep] = useState(0);
+  const [playing, setPlaying] = useState(() => !prefersReducedMotion());
+  useEffect(() => {
+    if (!viewOnly || loading || error) return;
+    setView(tourViews[tourStep]); api.current?.setView(tourViews[tourStep]);
+  }, [viewOnly, loading, error, tourStep]);
+  useEffect(() => {
+    if (!viewOnly || !playing || loading || error) return;
+    if (tourStep >= tourViews.length - 1) { setPlaying(false); return; }
+    const timer = setTimeout(() => setTourStep((s) => s + 1), 7000);
+    return () => clearTimeout(timer);
+  }, [viewOnly, playing, loading, error, tourStep]);
+  const goTour = (step: number) => { setPlaying(false); setTourStep(step); };
 
   const changeView = (next: ModelView) => {
     setDrawing(false); setSelectedPart(null); setNoteNotice(""); api.current?.enable(true); setView(next); api.current?.setView(next);
@@ -418,6 +436,34 @@ export default function ColonModel({ includeProcedure, onSaveDrawing = () => {},
   };
   const errorMessage = es ? (error === "unavailable" ? "El modelo 3D no está disponible en este navegador. Intente cargarlo de nuevo o use un navegador con WebGL. El texto sigue disponible." : "No se pudo mostrar la anatomía. Cargue el modelo de nuevo. El texto sigue disponible.") : error === "unavailable" ? "3D is unavailable in this browser. Try reloading the model or use a browser with WebGL. Written information remains available." : "The anatomy could not be displayed. Reload the model to try again. Written information remains available.";
   const selectionNotice = noteNotice === "saved" ? (es ? "Nota guardada con esta parte y ángulo de vista." : "Note saved with this part and camera angle.") : (es ? "Esta demostración permite explorar el abdomen. Selecciónelo para ver los órganos." : "This demo supports the abdomen. Select it to reveal the organs.");
+
+  if (viewOnly) {
+    const tourNames = es ? ["Abdomen", "Colon", "Vista de cerca"] : ["Abdomen", "Colon", "Close-up"];
+    return <div className="colon-model patient-tour" lang={language}>
+      <p className="pv-illustration-label" role="note">{es ? "Ilustración educativa. No es tu estudio y no muestra el tamaño, la profundidad ni el estadio de tu tumor." : "Educational illustration. This is not your scan and does not show your tumor's size, depth, or stage."}</p>
+      <div className="model-stage">
+        <div ref={host} className="model-canvas" />
+        <span className="model-corner-label">{tourStep + 1} / 3 · {tourNames[tourStep]}</span>
+        <button ref={partMarker} type="button" tabIndex={-1} aria-hidden="true" className="model-part-marker" style={{ visibility: "hidden", display: "none" }} />
+        {loading && !error && <div className="model-error" role="status">{es ? "Cargando la ilustración…" : "Loading the illustration…"}</div>}
+        {error && <div className="model-error" role="alert"><div><p>{errorMessage}</p><button type="button" className="button secondary" onClick={reloadModel}>{es ? "Volver a cargar" : "Reload"}</button></div></div>}
+      </div>
+      <div aria-live="polite">
+        <h3 className="pv-tour-title">{tourNames[tourStep]}</h3>
+        <p>{[
+          es ? "Aquí se ve el abdomen. El colon es rosado y la parte llamada colon sigmoide está en rojo." : "This shows the abdomen. The colon is pink, and the part called the sigmoid colon is red.",
+          es ? "Este es el colon solo. La parte roja muestra dónde está el colon sigmoide." : "This is the colon on its own. The red part shows where the sigmoid colon is.",
+          es ? "Una vista de cerca del interior del colon. El crecimiento es un dibujo de ejemplo, no una medida." : "A close-up inside the colon. The growth is an example drawing, not a measurement.",
+        ][tourStep]}</p>
+        {caption && <p className="pv-tour-caption">{caption}</p>}
+      </div>
+      <div className="pv-tour-controls">
+        <button type="button" className="button secondary" disabled={tourStep === 0 || disabled} onClick={() => goTour(tourStep - 1)}>{es ? "Sección anterior" : "Previous section"}</button>
+        <button type="button" className="button secondary" disabled={tourStep === tourViews.length - 1 || disabled} onClick={() => goTour(tourStep + 1)}>{es ? "Siguiente sección" : "Next section"}</button>
+        <button type="button" className="button" disabled={disabled} onClick={() => { setTourStep(0); setPlaying(!prefersReducedMotion()); }}>{es ? "Repetir" : "Replay"}</button>
+      </div>
+    </div>;
+  }
 
   return <div className="colon-model" lang={language}>
     <div className="model-depth-navigation" aria-label={es ? "Ruta de anatomía" : "Anatomy path"}><button type="button" disabled={depth === 0 || disabled} onClick={() => changeView(sequence[depth - 1])}>{es ? "Atrás" : "Back"}</button><span role="status">{sequence.slice(0, depth + 1).map((key) => viewNames[key]).join(" / ")}</span></div>
