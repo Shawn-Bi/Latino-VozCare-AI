@@ -22,7 +22,7 @@ export default async function(req: Request): Promise<Response> {
     const visit = visits[0];
 
     const draftsPage = await base44.asServiceRole.entities.EducationDraft.filter(
-      { patient_id: patientId },
+      { patient_id: patientId, visit_id: visit.id },
       { sort: "-revision", limit: 1 }
     );
     const drafts = draftsPage.items ?? draftsPage;

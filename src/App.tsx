@@ -111,6 +111,7 @@ function GlobalNav({ view, navigate, language, setLanguage, user, onSignOut }: {
 export default function App() {
   const { isAuthenticated, isLoadingAuth, user, authError, isCareTeamApproved: isApproved, refreshMembership } = useAuth();
   const [view, setView] = useState<View>(() => new URLSearchParams(window.location.search).get("view") === "doctor" ? "doctor" : "home");
+  const [demoPatientOpen, setDemoPatientOpen] = useState(false);
   const [language, setLanguage] = useState<Language>("en");
   const [liveToken] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get("view") === "live-patient" ? (q.get("token") || window.location.hash.slice(1) || null) : null; });
   const [toast, setToast] = useState("");
@@ -129,6 +130,7 @@ export default function App() {
   // so a late response for a previous patient is ignored instead of restoring that patient.
   const selectionRef = useRef<{ id: string | null }>({ id: null });
   const editVersion = useRef(0);
+  const writeInFlight = useRef(false);
 
   const isAdmin = user?.role === "admin";
   const recordsOpen = isApproved && DOCTOR_RECORD_ACCESS.available;
@@ -144,8 +146,13 @@ export default function App() {
     if (!selectedId || !recordsOpen) return;
     let cancelled = false;
     loadPatientData(selectedId)
-      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setDraftSaveState("idle"); setContactSaveState("idle");
-        getExistingPatientLink(data.patient.id).then((l) => { if (!cancelled && l) setApprovalState((s) => s.status === "idle" ? { status: "approved", token: l.token, expiresAt: l.expiresAt, linkUrl: `${window.location.origin}/?view=live-patient&token=${l.token}` } : s); }).catch(() => {}); })
+      .then((data) => { if (cancelled) return; if ("empty" in data) { setSelectedEmpty(data.patient); return; } setSelectedData(data); setApprovalState({ status: "idle" }); setDraftSaveState("idle"); setContactSaveState("idle");
+        const editsAtLoad = editVersion.current;
+        getExistingPatientLink(data.patient.id, data.visitId, data.draftId, data.serverRevision).then((l) => {
+          if (cancelled || !l?.matchesCurrentDraft || editVersion.current !== editsAtLoad) return;
+          setApprovalState({ status: "approved", token: l.token, expiresAt: l.expiresAt, linkUrl: `${window.location.origin}/?view=live-patient&token=${l.token}` });
+          setSelectedData((current) => current?.patient.id === data.patient.id ? { ...current, draft: { ...current.draft, approvedAt: l.approvedAt } } : current);
+        }).catch(() => {}); })
       .catch((err) => { if (!cancelled) setSelectedError(err.message || "Could not load this patient's data."); });
     return () => { cancelled = true; };
   }, [selectedId, recordsOpen, refreshKey]);
@@ -162,16 +169,20 @@ export default function App() {
 
   const setEducation: Dispatch<SetStateAction<EducationDraft>> = (value) => {
     editVersion.current++;
+    setApprovalState({ status: "idle" });
     setSelectedData((current) => current ? { ...current, draft: typeof value === "function" ? value(current.draft) : value } : current);
     setDraftSaveState((state) => state === "saving" ? state : "idle");
   };
 
   const handleSaveDraft = async () => {
-    if (!selectedData) return;
+    if (!selectedData || writeInFlight.current) return;
+    writeInFlight.current = true;
     const selection = selectionRef.current;
     const { draftId, serverRevision, draft } = selectedData;
     const patientId = selectedData.patient.id;
     const editsAtStart = editVersion.current;
+    setApprovalState({ status: "idle" });
+    setSelectedData((current) => current ? { ...current, draft: { ...current.draft, approvedAt: null } } : current);
     setDraftSaveState("saving");
     try {
       const result = await saveDraft(draftId, serverRevision, draft);
@@ -186,18 +197,21 @@ export default function App() {
       setDraftSaveState(editVersion.current === editsAtStart ? "saved" : "idle");
     } catch {
       if (selectionRef.current === selection) setDraftSaveState("error");
-    }
+    } finally { writeInFlight.current = false; }
   };
 
   const handleSaveContact = async (phone: string, address: string, appointment: { startsAt: string; endsAt: string; hospital: string; address: string }) => {
     if (!selectedData) return;
     const selection = selectionRef.current;
     const patientId = selectedData.patient.id;
+    editVersion.current++;
+    setSelectedData((current) => current ? { ...current, draft: { ...current.draft, approvedAt: null } } : current);
+    setApprovalState({ status: "idle" });
     setContactSaveState("saving");
     try {
       await saveContactAndAppointment(patientId, selectedData.visitId, phone, address, appointment);
       if (selectionRef.current !== selection) return;
-      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
+      setSelectedData((current) => current && current.patient.id === patientId ? { ...current, draft: { ...current.draft, approvedAt: null }, patient: { ...current.patient, phone, address }, visit: { ...current.visit, appointment: { ...current.visit.appointment, ...appointment } } } : current);
       setContactSaveState("saved");
     } catch {
       if (selectionRef.current === selection) setContactSaveState("error");
@@ -205,15 +219,27 @@ export default function App() {
   };
 
   const handleApprove = async () => {
-    if (!selectedData) return;
+    if (!selectedData || writeInFlight.current || approvalState.status === "approving" || draftSaveState === "saving" || contactSaveState === "saving") return;
+    const selection = selectionRef.current;
+    writeInFlight.current = true;
+    const editsAtStart = editVersion.current;
+    const { patient, visitId, draftId, serverRevision, draft } = selectedData;
     setApprovalState({ status: "approving" });
     try {
-      const result = await approvePacket(selectedData.patient.id, selectedData.visitId, selectedData.draftId, selectedData.serverRevision);
+      const saved = await saveDraft(draftId, serverRevision, draft);
+      if (selectionRef.current !== selection) return;
+      if (saved.status === "conflict") { setDraftSaveState("conflict"); throw new Error("The draft changed. Reload and review it again."); }
+      setSelectedData((current) => current?.patient.id === patient.id ? { ...current, serverRevision: saved.revision, draft: { ...current.draft, revision: saved.revision, drawing: draft.drawing && current.draft.drawing === draft.drawing ? { ...draft.drawing, fileUri: saved.drawingFileUri } : current.draft.drawing } } : current);
+      if (editVersion.current !== editsAtStart) throw new Error("The draft was edited while saving. Review your changes before approving.");
+      const result = await approvePacket(patient.id, visitId, draftId, saved.revision);
+      if (selectionRef.current !== selection || editVersion.current !== editsAtStart) return;
       const linkUrl = `${window.location.origin}/?view=live-patient&token=${result.token}`;
+      setSelectedData((current) => current?.patient.id === patient.id ? { ...current, draft: { ...current.draft, approvedAt: result.approvedAt } } : current);
+      setDraftSaveState("saved");
       setApprovalState({ status: "approved", token: result.token, expiresAt: result.expiresAt, linkUrl });
     } catch (err: any) {
-      setApprovalState({ status: "error", message: err?.message || "Could not approve the packet." });
-    }
+      if (selectionRef.current === selection && editVersion.current === editsAtStart) setApprovalState({ status: "error", message: err?.message || "Could not approve the packet." });
+    } finally { writeInFlight.current = false; }
   };
 
   const handleReload = async () => {
@@ -223,7 +249,7 @@ export default function App() {
       const data = await loadPatientData(selection.id);
       if (selectionRef.current !== selection || "empty" in data) return;
       editVersion.current++;
-      setSelectedData(data); setDraftSaveState("idle");
+      setSelectedData(data); setApprovalState({ status: "idle" }); setDraftSaveState("idle");
     } catch {
       if (selectionRef.current === selection) setToast(language === "es" ? "No se pudo recargar el borrador." : "Could not reload the draft.");
     }
@@ -234,7 +260,7 @@ export default function App() {
   if (liveToken) return <LivePatientView token={liveToken} />;
 
   return <SiteLanguageContext.Provider value={language}><div className="app">
-    <GlobalNav view={view} navigate={navigate} language={language} setLanguage={setLanguage} user={isAuthenticated ? user : null} onSignOut={handleSignOut} />
+    {!(view === "demo" && demoPatientOpen) && <GlobalNav view={view} navigate={navigate} language={language} setLanguage={setLanguage} user={isAuthenticated ? user : null} onSignOut={handleSignOut} />}
     {view === "home" && <Home navigate={navigate} language={language} />}
     {view === "doctor" && (
       isLoadingAuth ? <main className="workspace"><div className="loading-state">Loading…</div></main>
@@ -254,7 +280,7 @@ export default function App() {
         />
     )}
     {view === "admin" && isAuthenticated && isAdmin && <main className="workspace"><AdminPanel onProvisioned={handleProvisioned} onMembershipChanged={refreshMembership} /></main>}
-    {view === "demo" && <DemoWorkspace language={language} onExit={() => navigate("home")} />}
+    {view === "demo" && <DemoWorkspace language={language} onPreviewChange={setDemoPatientOpen} onExit={() => { setDemoPatientOpen(false); navigate("home"); }} />}
     {view === "patient" && <PatientPreviewInfo language={language} navigate={navigate} />}
     {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
   </div></SiteLanguageContext.Provider>;
@@ -310,7 +336,7 @@ function Home({ navigate, language }: { navigate: (view: View) => void; language
         <h1>{es ? "Cada paciente merece " : "Every patient deserves to "}<em>{es ? "entender su cuidado." : "understand their care."}</em></h1>
         <p className="hero-lead">{es ? "VozCare llama al día siguiente de la visita. Un sitio web sencillo responde junto con la conversación: instrucciones de cuidado, citas, indicaciones para llegar y una forma clara de contactar a tu equipo." : "VozCare follows up by phone the day after a visit. A simple website responds alongside the conversation—with care instructions, appointments, directions, and a clear path back to your team."}</p>
         <div className="hero-actions"><Button onClick={() => navigate("doctor")} icon="arrow">{es ? "Abrir panel médico" : "Open doctor dashboard"}</Button><Button onClick={() => navigate("demo")} variant="secondary">{es ? "Probar como médico de demostración" : "Try as a demo doctor"}</Button><Button onClick={() => navigate("patient")} variant="quiet">{es ? "Ver experiencia del paciente" : "Preview patient experience"}</Button></div>
-        <p className="hero-note"><Icon name="shield" size={16} /> {es ? "Datos ficticios · Llamadas y mensajes simulados" : "Fictional data · Calls and texts are simulated"}</p>
+        <p className="hero-note"><Icon name="shield" size={16} /> {es ? "Datos ficticios · Llamadas reales disponibles en la demo" : "Fictional data · Real calls available in the demo"}</p>
       </div>
       <div className="hero-visual">
         <div className="portrait-backdrop" aria-hidden="true" />
@@ -323,7 +349,7 @@ function Home({ navigate, language }: { navigate: (view: View) => void; language
     </section>
     <FeatureWalkthrough navigate={navigate} language={language} />
     <div className="care-photo-section"><figure><img src="/images/clinician-patient-v1.png" width="1536" height="1024" loading="lazy" decoding="async" alt={es ? "Imagen ilustrativa de una médica y una paciente latina mayor revisando juntas las instrucciones de cuidado." : "Illustrative photo of a clinician and an older Latina patient reviewing care instructions together."} /></figure></div>
-    <footer className="home-footer"><div><Logo /><p>{es ? "El cuidado continúa después de la visita." : "Care continues after the visit."}</p></div><nav aria-label={es ? "Navegación del pie de página" : "Footer views"}><button onClick={() => navigate("doctor")}>{es ? "Panel médico" : "Doctor dashboard"}</button><button onClick={() => navigate("patient")}>{es ? "Experiencia del paciente" : "Patient experience"}</button><a href="#features">{es ? "Explorar funciones" : "Explore features"}</a></nav><p className="footer-note">{es ? "Prototipo interactivo · Pacientes ficticios" : "Interactive prototype · Fictional patients"}<br />{es ? "Llamadas, mensajes y mapas simulados." : "Calls, texts, and maps are simulated."}</p></footer>
+    <footer className="home-footer"><div><Logo /><p>{es ? "El cuidado continúa después de la visita." : "Care continues after the visit."}</p></div><nav aria-label={es ? "Navegación del pie de página" : "Footer views"}><button onClick={() => navigate("doctor")}>{es ? "Panel médico" : "Doctor dashboard"}</button><button onClick={() => navigate("patient")}>{es ? "Experiencia del paciente" : "Patient experience"}</button><a href="#features">{es ? "Explorar funciones" : "Explore features"}</a></nav><p className="footer-note">{es ? "Prototipo interactivo · Pacientes ficticios" : "Interactive prototype · Fictional patients"}<br />{es ? "SMS no configurado · Vistas de funciones ilustrativas." : "SMS is not configured · Illustrative feature previews."}</p></footer>
   </main>;
 }
 
@@ -461,7 +487,7 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
       <EmptyPatientDetail patient={selectedEmpty} language={language} />
     </> : <>
       <button type="button" className="back-to-patients" onClick={onBack}>← {es ? "Todos los pacientes" : "All patients"}</button>
-      {selectedData && <div className="patient-record-context"><span className="person"><i>{selectedData.patient.initials}</i><span><strong>{selectedData.patient.name}</strong><small>{selectedData.patient.phone} · {selectedData.patient.preferredLanguage === "es" ? "Español" : "English"}</small></span></span><span>{selectedData.patient.address || (es ? "Falta dirección" : "Address missing")}</span><Badge tone="warning">{es ? "Borrador" : "Draft"}</Badge></div>}
+      {selectedData && <div className="patient-record-context"><span className="person"><i>{selectedData.patient.initials}</i><span><strong>{selectedData.patient.name}</strong><small>{selectedData.patient.phone} · {selectedData.patient.preferredLanguage === "es" ? "Español" : "English"}</small></span></span><span>{selectedData.patient.address || (es ? "Falta dirección" : "Address missing")}</span><Badge tone={selectedData.draft.approvedAt ? "success" : "warning"}>{selectedData.draft.approvedAt ? (es ? "Aprobado" : "Approved") : (es ? "Borrador" : "Draft")}</Badge></div>}
 
       {selectedError ? <div className="loading-state" style={{ color: "var(--red)" }}>{selectedError}</div>
       : !selectedData ? <div className="loading-state">{es ? "Cargando datos del paciente…" : "Loading patient data…"}</div>
@@ -472,13 +498,10 @@ function DoctorView({ user, onSignOut, patients, isLoadingPatients, patientsErro
         <div role="tabpanel" id={`doctor-panel-${tab}`} aria-labelledby={`doctor-tab-${tab}`} tabIndex={0}>
           {tab === "patients" && <PatientOverview key={selectedData.patient.id} data={selectedData} onSaveContact={onSaveContact} contactSaveState={contactSaveState} review={() => setTab("care")} language={language} />}
           {tab === "care" && <>
-            <p className="workspace-language-note">{es ? "Los controles de revisión están en inglés. El paquete del paciente está disponible en español e inglés." : "Review controls are in English. Patient packets are available in Spanish and English."}</p>
-            <section className="panel delivery-review"><h2>{es ? "Datos de entrega guardados" : "Saved delivery details"}</h2><p>{selectedData.patient.name} · {selectedData.patient.phone} · {selectedData.patient.address}</p><p>{appointmentLabel(selectedData.visit.appointment, language)} · {selectedData.visit.appointment.hospital}</p><p>{es ? "La aprobación final y la entrega al paciente aún no están disponibles. El SMS y las llamadas no están conectados." : "Final approval and patient delivery are not available yet. SMS and calls are not connected."}</p>{deliveryIssue && <p role="alert">{deliveryIssue}</p>}</section>
-            <EducationReview key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} onApprove={onApprove} approvalState={approvalState} deliveryIssue={deliveryIssue ?? undefined} />
-            <DeliveryPanel selectedData={selectedData} language={language} />
+            <EducationReview language={language} key={selectedData.patient.id} draft={selectedData.draft} setDraft={setEducation} patientName={selectedData.patient.name} firstName={selectedData.patient.firstName} caseKind={selectedData.patient.caseKind} onSave={onSaveDraft} saveState={draftSaveState} onReload={onReload} onApprove={onApprove} approvalState={approvalState} deliveryIssue={deliveryIssue ?? undefined} />
           </>}
-          {tab === "session" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Seguimiento" : "Follow-up"}</h2></div></div><UnavailableNotice title={es ? "Llamadas y conversación no conectadas" : "Calls and conversation are not connected"} message={es ? "El servicio de llamadas y el agente de conversación no están configurados. No se realiza ninguna llamada ni se procesan eventos de conversación." : "The call service and conversation agent have not been configured. No calls are placed and no conversation events are processed."} /></section>}
-          {tab === "queue" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Solicitudes" : "Assistance requests"}</h2></div></div><UnavailableNotice title={es ? "Solicitudes no disponibles" : "Assistance requests are not available"} message={es ? "Las solicitudes de asistencia requieren un enlace de paciente seguro y un servicio de llamadas conectados." : "Assistance requests require a connected patient link backend and call service."} /></section>}
+          {tab === "session" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Seguimiento" : "Follow-up"}</h2></div></div><UnavailableNotice title={es ? "Resultados del seguimiento" : "Follow-up results"} message={es ? "Las llamadas se solicitan desde el enlace del paciente. Aún no se muestran transcripciones ni resultados de comprensión en este espacio." : "Calls are requested from the patient link. Transcripts and understanding results are not yet shown in this workspace."} /></section>}
+          {tab === "queue" && <section className="panel"><div className="panel-heading"><div><h2>{es ? "Solicitudes" : "Assistance requests"}</h2></div></div><UnavailableNotice title={es ? "Solicitudes no disponibles" : "Assistance requests are not available"} message={es ? "Las solicitudes de asistencia aún no se guardan en una cola del equipo." : "Assistance requests are not yet saved to a care-team queue."} /></section>}
         </div>
       </>}
     </>}
@@ -534,25 +557,14 @@ function PatientOverview({ data, onSaveContact, contactSaveState, review, langua
     <section className="panel selected-patient">
       <p className="eyebrow">{es ? "EDUCACIÓN DE LA VISITA" : "VISIT EDUCATION"}</p>
       <h2>{es ? `Ayuda a ${data.patient.firstName} a entender su visita.` : `Help ${data.patient.firstName} understand their visit.`}</h2>
-      <p>{data.patient.caseKind === "colon" ? (es ? "Colon sigmoide · Estadio pendiente" : "Sigmoid colon · Stage pending") : (es ? "Ejemplo de seguimiento · Sin diagnóstico registrado" : "Follow-up example · No diagnosis recorded")}</p>
-      <Badge tone="warning">{es ? "Necesita revisión" : "Needs review"}</Badge>
+      <h3>{es ? "Explicación del borrador" : "Draft explanation"}</h3><p>{es ? data.draft.spanish : data.draft.english}</p><h3>{es ? "Nota de la visita" : "Visit note"}</h3><p className="visit-note-summary">{data.draft.note || (es ? "No se registró una nota de la visita." : "No visit note has been recorded.")}</p><p>{data.patient.caseKind === "colon" ? (es ? "El modelo explica el colon sigmoide, una parte del intestino grueso. Consulta la nota para el diagnóstico y los resultados pendientes." : "The model explains the sigmoid colon, part of the large intestine. Refer to the visit note for the diagnosis and pending results.") : ""}</p>
+      <Badge tone={data.draft.approvedAt ? "success" : "warning"}>{data.draft.approvedAt ? (es ? "Aprobado" : "Approved") : (es ? "Necesita revisión" : "Needs review")}</Badge>
       <Button onClick={review} icon="arrow">{es ? "Revisar paquete educativo" : "Review education draft"}</Button>
-      <p>{es ? "Revisa y guarda el borrador educativo. La aprobación final aún no está disponible." : "Review and save the education draft. Final approval is not available yet."}</p>
+      <p>{es ? "Revisa el contenido y aprueba el paquete para crear su enlace personal." : "Review the content and approve the packet to create its personal link."}</p>
     </section>
   </div>;
 }
 
-function DeliveryPanel({ selectedData, language }: { selectedData: LoadedPatientData; language: Language }) {
-  const es = language === "es";
-  return <section className="panel delivery-panel">
-    <div className="panel-heading"><div><h2>{es ? "Entrega y seguimiento" : "Delivery and follow-up"}</h2><p>{selectedData.patient.name} · {es ? "Revisión del borrador" : "Draft revision"} {selectedData.draft.revision}</p></div>
-      <Badge tone="warning">{es ? "Borrador" : "Draft"}</Badge></div>
-    <UnavailableNotice
-      title={es ? "Aprobación final, enlaces, SMS y llamadas no disponibles" : "Final approval, patient links, SMS, and calls are unavailable"}
-      message={es ? "La aprobación final requiere el servicio de paquetes aprobados inmutables, que aún no existe. Los enlaces para pacientes, el SMS y las llamadas tampoco están conectados. Guardar un borrador revisado no envía nada ni crea ningún enlace." : "Final approval needs the immutable approved-packet backend, which has not been built. Patient links, SMS delivery, and the call service are also not connected. Saving a reviewed draft sends nothing and creates no link."}
-    />
-  </section>;
-}
 
 function AppointmentCard({ language, appointment = initialWorkspace().records[0].visit.appointment }: { language: Language; appointment?: Appointment }) {
   const es = language === "es";

@@ -1,3 +1,4 @@
+import { demoAppointment, demoStartingAddress } from "../../base44/shared/demoScenario.ts";
 // Public, hardcoded fictional demo fixtures. Never loaded from or saved to the server.
 import { initialEducation, type EducationDraft } from "@/education";
 import type { Patient, Visit } from "@/workflow";
@@ -6,7 +7,7 @@ import type { PatientPacketView } from "@/lib/vozcare-api";
 export type DemoRecord = { patient: Patient; visit: Visit; draft: EducationDraft };
 
 const seeds = [
-  { id: "demo-maria", name: "María Rivera", firstName: "María", initials: "MR", address: "120 Example Street", caseKind: "colon" as const, day: 12, hour: 14 },
+  { id: "demo-maria", name: "María Rivera", firstName: "María", initials: "MR", address: demoStartingAddress, caseKind: "colon" as const, day: 12, hour: 14 },
   { id: "demo-jose", name: "José García", firstName: "José", initials: "JG", address: "240 Sample Lane", caseKind: "general" as const, day: 13, hour: 15 },
   { id: "demo-ana", name: "Ana López", firstName: "Ana", initials: "AL", address: "360 Fictional Road", caseKind: "general" as const, day: 14, hour: 13 },
 ];
@@ -28,7 +29,7 @@ function generalDraft(name: string, first: string): EducationDraft {
 export function createDemoRecords(): DemoRecord[] {
   return seeds.map((s) => ({
     patient: { id: s.id, doctorId: "demo", name: s.name, firstName: s.firstName, initials: s.initials, phone: "Demo · no phone", address: s.address, preferredLanguage: "es", caseKind: s.caseKind },
-    visit: { id: `${s.id}-visit`, patientId: s.id, completedAt: "2026-10-10T16:00:00Z", appointment: { id: `${s.id}-appt`, startsAt: `2026-10-${s.day}T${s.hour}:30:00Z`, endsAt: `2026-10-${s.day}T${s.hour + 1}:30:00Z`, timeZone: "America/New_York", hospital: "Central Community Hospital", address: "500 Demo Avenue" } },
+    visit: { id: `${s.id}-visit`, patientId: s.id, completedAt: "2026-10-10T16:00:00Z", appointment: s.id === "demo-maria" ? { id: `${s.id}-appt`, ...demoAppointment } : { id: `${s.id}-appt`, startsAt: `2026-10-${s.day}T${s.hour}:30:00Z`, endsAt: `2026-10-${s.day}T${s.hour + 1}:30:00Z`, timeZone: "America/New_York", hospital: "Central Community Hospital", address: "500 Demo Avenue" } },
     draft: s.caseKind === "colon" ? { ...initialEducation } : generalDraft(s.name, s.firstName),
   } as DemoRecord));
 }
@@ -43,4 +44,10 @@ export function toDemoPacket(r: DemoRecord): PatientPacketView {
     appointment: { startsAt: a.startsAt, endsAt: a.endsAt, timeZone: a.timeZone, hospital: a.hospital, address: a.address },
     startingAddress: r.patient.address, approvedAt: "",
   };
+}
+// The public demo call uses a fixed server-side scenario, not edited preview text.
+export function matchesDemoCall(packet: PatientPacketView): boolean {
+  const reference = toDemoPacket(createDemoRecords()[0]);
+  return ["patientName", "firstName", "english", "spanish", "planEnglish", "planSpanish", "captionEnglish", "captionSpanish", "includeProcedure", "startingAddress", "caseKind"].every((field) => packet[field as keyof PatientPacketView] === reference[field as keyof PatientPacketView])
+    && JSON.stringify(packet.appointment) === JSON.stringify(reference.appointment);
 }

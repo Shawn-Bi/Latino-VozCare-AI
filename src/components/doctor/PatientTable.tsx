@@ -4,7 +4,7 @@ import type { Language } from "../../workflow";
 
 const label = (es: boolean) => ({
   education: { none: es ? "Sin borrador" : "No draft yet", draft: es ? "Necesita revisión" : "Needs review", approved: es ? "Aprobado" : "Approved" },
-  followUp: { not_started: es ? "No iniciado" : "Not started", link_ready: es ? "Enlace listo" : "Link ready", called: es ? "Llamada realizada" : "Call placed" },
+  followUp: { not_started: es ? "No iniciado" : "Not started", link_ready: es ? "Enlace listo" : "Link ready", called: es ? "Llamada intentada" : "Call attempted" },
   lang: { es: es ? "Español" : "Spanish", en: es ? "Inglés" : "English" },
 });
 const tone = { none: "neutral", draft: "warning", approved: "success" } as const;

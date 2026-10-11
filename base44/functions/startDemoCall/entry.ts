@@ -1,6 +1,7 @@
+import { demoAppointment, demoStartingAddress, demoEducation } from "../../shared/demoScenario.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { secrets } from 'base44:runtime';
-import { errorResponse, AuthError } from "../../shared/access.ts";
+import { requireApprovedDoctor, errorResponse, AuthError } from "../../shared/access.ts";
 import { usNumber, findAgentPhoneId, dial } from "../../shared/outboundCall.ts";
 import { agentVars } from "../../shared/agentVars.ts";
 
@@ -14,6 +15,10 @@ export default async function(req: Request): Promise<Response> {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const mode = body?.mode === "tester" ? "tester" : "self";
+    if (mode === "tester") {
+      const user = await requireApprovedDoctor(base44);
+      if (user.role !== "admin") throw new AuthError(403, "Team test calls require an administrator.");
+    }
     const language = body?.language === "en" ? "en" : "es";
 
     const since = new Date(Date.now() - 3600000).toISOString();
@@ -29,17 +34,10 @@ export default async function(req: Request): Promise<Response> {
     const conversationId = await dial(agentPhoneId, toNumber, sessionId, agentVars({
       firstName: "María",
       language,
-      startsAt: "2026-10-12T14:30:00Z",
-      timeZone: "America/New_York",
-      hospital: "Central Community Hospital",
-      address: "500 Demo Avenue",
-      startingAddress: "120 Example Street",
-      careSummary: en
-        ? "This is a fictional demo. At the visit, the doctor explained a finding in the sigmoid colon. Depth and stage are still pending."
-        : "Esta es una demostración ficticia. En la visita, el médico explicó un hallazgo en el colon sigmoide. La profundidad y la etapa están pendientes.",
-      carePlan: en
-        ? "Attend the follow-up appointment and bring your questions to the care team."
-        : "Asista a su cita de seguimiento y lleve sus preguntas al equipo de atención.",
+      ...demoAppointment,
+      startingAddress: demoStartingAddress,
+      careSummary: en ? demoEducation.english : demoEducation.spanish,
+      carePlan: en ? demoEducation.planEnglish : demoEducation.planSpanish,
     }));
     if (conversationId === null) {
       await base44.asServiceRole.entities.DemoCall.update(record.id, { ended_at: new Date().toISOString() });

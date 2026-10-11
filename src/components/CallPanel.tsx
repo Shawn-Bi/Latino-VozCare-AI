@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { startCall } from "../lib/vozcare-api";
+import { useAuth } from "../lib/AuthContext";
+import { startCall, validatePatientLink } from "../lib/vozcare-api";
 import type { Language } from "../workflow";
 import type { CallState } from "./patient/CallStatusCard";
 import { callErrorText } from "./patient/patientText";
@@ -8,6 +9,7 @@ type Props = { token: string; language: Language; used: number; setUsed: (n: num
 
 export default function CallPanel({ token, language, used, setUsed, state, setState }: Props) {
   const es = language === "es";
+  const { user, isCareTeamApproved } = useAuth();
   const [phone, setPhone] = useState("");
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
@@ -22,9 +24,13 @@ export default function CallPanel({ token, language, used, setUsed, state, setSt
       setState("requested");
     } catch (e: any) {
       setError(callErrorText(e.message || "", language));
+      const latest = await validatePatientLink(token).catch(() => null);
+      if (latest) setUsed(latest.link.callAttempts);
       setState("error");
     }
   };
+
+  if (state === "requesting" || state === "requested") return null;
 
   return <section className="pv-card" aria-labelledby="call-setup-title">
     <h2 id="call-setup-title">{es ? "Pide tu llamada" : "Request your call"}</h2>
@@ -35,9 +41,9 @@ export default function CallPanel({ token, language, used, setUsed, state, setSt
     <button type="button" className="button pv-primary" disabled={busy || !consent || !phone.trim() || left === 0} onClick={() => call("self")}>{busy ? (es ? "Pidiendo…" : "Requesting…") : (es ? "Llamar a mi número" : "Call my number")}</button>
     {error && <p className="pv-error" role="alert">{error}</p>}
     <p className="pv-meta">{left > 0 ? (es ? `${left} de 3 intentos disponibles` : `${left} of 3 attempts available`) : (es ? "Se usaron los 3 intentos." : "All 3 attempts used.")}</p>
-    <div className="pv-team">
+    {user?.role === "admin" && isCareTeamApproved && <div className="pv-team">
       <p className="pv-meta">{es ? "Solo para el equipo de VozCare:" : "For the VozCare team only:"}</p>
       <button type="button" className="button quiet pv-quiet" disabled={busy || left === 0} onClick={() => call("tester")}>{es ? "Llamada de prueba del equipo" : "Team test call"}</button>
-    </div>
+    </div>}
   </section>;
 }

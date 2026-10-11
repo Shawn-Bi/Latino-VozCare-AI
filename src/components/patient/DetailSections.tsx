@@ -53,7 +53,7 @@ export function VisualSection({ p, language }: P) {
   const es = language === "es";
   return <section className="pv-card" aria-labelledby="d-visual">
     <h2 id="d-visual">{es ? "Explicación visual" : "Visual explanation"}</h2>
-    {p.caseKind === "colon" && <Suspense fallback={<p role="status">{es ? "Cargando el modelo 3D…" : "Loading the 3D model…"}</p>}><ColonModel viewOnly includeProcedure={p.includeProcedure} /></Suspense>}
+    {p.caseKind === "colon" && <Suspense fallback={<p role="status">{es ? "Cargando el modelo 3D…" : "Loading the 3D model…"}</p>}><ColonModel language={language} viewOnly includeProcedure={p.includeProcedure} /></Suspense>}
     {p.drawingUrl && <img className="pv-img" src={p.drawingUrl} alt={es ? "Ilustración educativa revisada por tu equipo" : "Educational illustration reviewed by your team"} />}
     <p>{hasVisual(p) ? (es ? p.captionSpanish : p.captionEnglish) : (es ? "Tu equipo no aprobó una explicación visual para esta visita." : "Your care team did not approve a visual for this visit.")}</p>
   </section>;

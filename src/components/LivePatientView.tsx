@@ -21,13 +21,13 @@ export default function LivePatientView({ token }: { token: string }) {
 
   useEffect(() => {
     validatePatientLink(token)
-      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "error" : d.link.lastCallId ? "requested" : "none"); })
+      .then((d) => { setData(d); setLanguage(d.packet.deliveryLanguage); setUsed(d.link.callAttempts); setCallState(d.link.callEndedAt ? "ended" : d.link.lastCallId ? "requested" : "none"); })
       .catch((e) => setError(e.message || ""));
   }, [token]);
 
   const [callEnded, setCallEnded] = useState(false);
-  const { card, ended } = useCallCard(data ? { token } : null, callState === "requested" && !callEnded);
-  useEffect(() => { if (ended) setCallEnded(true); }, [ended]);
+  const { card, ended } = useCallCard(data && callState !== "requesting" ? { token } : null, callState === "requested" && !callEnded);
+  useEffect(() => { if (ended) { setCallEnded(true); setCallState("ended"); } }, [ended]);
   useEffect(() => { if (callState === "requesting") setCallEnded(false); }, [callState]);
 
   const es = language === "es";
@@ -44,8 +44,13 @@ export default function LivePatientView({ token }: { token: string }) {
       <p className="pv-greeting">{es ? `Hola, ${p.firstName}.` : `Hello, ${p.firstName}.`}</p>
       <h1>{es ? "Tu información de seguimiento" : "Your follow-up information"}</h1>
     </div>
-    <div className="pv-tabs" role="tablist" aria-label={es ? "Secciones" : "Sections"}>
-      {tabs.map(([id, text]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{text}</button>)}
+    <div className="pv-tabs" role="tablist" aria-label={es ? "Secciones" : "Sections"} onKeyDown={(event) => {
+      const next = event.key === "ArrowRight" || event.key === "ArrowLeft" ? (tab === "conversation" ? "details" : "conversation") : event.key === "Home" ? "conversation" : event.key === "End" ? "details" : null;
+      if (!next) return;
+      event.preventDefault(); setTab(next);
+      event.currentTarget.querySelector<HTMLButtonElement>(`#tab-${next}`)?.focus();
+    }}>
+      {tabs.map(([id, text]) => <button key={id} type="button" role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{text}</button>)}
     </div>
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="pv-stack">
       {tab === "conversation" ? <>
