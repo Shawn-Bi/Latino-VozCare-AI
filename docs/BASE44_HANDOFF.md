@@ -1,111 +1,81 @@
-# VozCare Base44 handoff
+# VozCare Base44 implementation handoff
 
-Status: Google sign-in, admin-approved care-team memberships (CareTeamMembership), and synthetic education drafts are implemented. Patient, Visit and EducationDraft are admin-only. SMS, phone calls, maps, patient links, and final approval are not connected.
+Updated October 11, 2026. This document replaces the earlier Free-plan blocker and local simulation migration plan. Backend functions and live calls are now implemented. Use fictional patient data only; this is a hackathon demo, not a production clinical system.
 
-## Blocked: secure doctor-record operation
+## Current flow
 
-Doctors cannot open patient records yet. Backend functions require the Builder plan or higher and this workspace does not have it, so no client-only fallback was built. `DOCTOR_RECORD_ACCESS.available` in `src/lib/record-access.ts` stays `false`, and the doctor record functions in `src/lib/vozcare-api.ts` refuse to run.
+1. Open the [public website](https://vozcare.base44.app/). Use **Try as a demo doctor** without sign-in, or sign in with Google for the doctor workspace. Google sign-in alone does not grant doctor access: an approved care-team membership is required.
+2. Select an assigned patient, check their visit and contact details, and review the source note, visual, bilingual wording, and reading choices. Admin management is separate from the doctor workflow.
+3. Complete the review checks. Next section requires the current section to be complete; the final panel exposes the same checks directly. A new unapproved packet initially follows the site language, with a manual language override. Existing approved packets retain their language.
+4. Save and approve the packet. The backend validates assignment and revision, snapshots the approved patient content and appointment, and creates a seven-day personal link. Copy or open the link manually. No SMS is sent.
+5. The patient sees only their scoped patient experience, with **Conversation** and **Full details**. A call starts only after an explicit request. The public demo accepts a tester-entered US number; the team test button is restricted to approved administrators.
+6. During the call, ElevenLabs tool events change one Conversation card. Appointment shows a calendar; directions use Google Maps; care shows saved instructions; education shows the patient visual. Full details stays available without an automatic tab switch.
+7. Call setup is hidden while starting or active and returns after the call ends or fails. The last useful card remains visible. Personal links allow three attempts; public demo calls have an app-wide five-per-hour limit.
 
-When backend functions are available, one Base44 function must, on every request: derive the caller from request auth, never from the payload; require an approved CareTeamMembership for that user; require `Patient.assigned_doctor_id` to equal the caller; require the Visit and EducationDraft to belong to the requested patient; update a draft only when its stored revision equals the revision the editor loaded, then add one; and keep service-role credentials server-side. Then point `vozcare-api.ts` at that function and flip the flag. Final approval additionally needs the immutable ApprovedPacket backend described below.
+Directions use the saved origin or device coordinates after an explicit location request. Denied location access falls back to the saved address. Fictional addresses are labeled as example routes and may not resolve correctly. Anatomy illustrations do not show the patient's exact tumor size, depth, or stage.
 
-## Superseded local journey (domain logic only)
+## Source and deployment
 
-The UI no longer exposes this flow. The pure functions behind it stay covered by `tests/workflow.test.ts`.
+- Repository: [Shawn-Bi/Latino-VozCare-AI](https://github.com/Shawn-Bi/Latino-VozCare-AI)
+- Connected branch: `main`
+- Editor: [Base44 preview](https://app.base44.com/apps/6aca7bb397b1030686eef3a2/editor/preview)
+- Public app: [vozcare.base44.app](https://vozcare.base44.app/)
 
-1. Home → Doctor view → Continue as demo doctor.
-2. Select María, José, or Ana. Their records, drafts, appointments, links, sessions, and requests are independent.
-3. Confirm contact/appointment details inside that record. Review its education draft.
-4. Decide on every offered reading link and complete the three review checks.
-5. Approve and send demo link. An immutable patient-facing packet is created; a simulated SMS is recorded. No call starts yet.
-6. Open personal demo link in another tab of the same browser. It opens only the patient's approved packet and starts one simulated call.
-7. Example statements or typed text generate scoped conversation events. Directions use the saved starting address without an extra confirmation step.
-8. Confirm a transportation request. Staff see that patient's request; status changes update the patient tab.
-9. Refresh or reopen the same link to resume without a duplicate call. Ended calls retain approved information.
+Review changes in a PR, merge to `main`, wait for Base44 GitHub sync, and verify the editor contains the expected revision. Publish from the editor, then check the public site separately. GitHub sync alone is not publication. Do not use direct CLI deployment for this GitHub-connected app. No local demo server or temporary tunnel is required for the Base44 flow.
 
-Local records persist under `vozcare-patient-workflow-v1` in browser localStorage. Demo doctor access is a sessionStorage flag. Both are simulations and must be replaced. Do not enter real patient data. Personal links work only on the same browser and local origin that holds the fixture records. Hash tokens avoid sending the token in the initial local HTTP request. This does not make client-only access checks secure.
+## Implementation map
 
-## Implementation owners
-
-- `src/workflow.ts`: typed records, snapshot approval, token lifecycle, event routing, once-only call start, retry rules, appointment time conversion.
-- `src/local-store.ts`: temporary local persistence and cross-tab notification. Mutations read the latest stored workspace; quota errors preserve the previous saved record.
-- `src/App.tsx`: doctor record navigation, delivery states, scoped patient route, and simulated conversation input.
-- `src/EducationReview.tsx`: doctor review/model workflow. Review controls remain English with a translated notice; bilingual packet content is separate.
-- `src/ApprovedCare.tsx`: patient-facing approved content. Source notes and private anatomy annotations are excluded from the packet.
-- `src/tokens.css` and `src/index.css`: existing typography, palette, spacing, focus, and responsive component rules.
-
-## Proposed Base44 records
-
-The local adapter nests records for simplicity and supports one transportation request per patient. Use separate request rows in Base44 to preserve multiple requests and their original session provenance. Map these relationships to persisted Base44 entities:
-
-| Entity | Relationships and fields |
+| Responsibility | Current source |
 | --- | --- |
-| Doctor / care-team membership | Auth user ID, authorized role, care-team membership |
-| Patient | ID, assigned care team, name, language, phone, saved address |
-| Visit | Patient ID, completed date, appointment ID, doctor source note |
-| EducationDraft | Patient/visit IDs, revision, bilingual fields, doctor annotations, resource decisions, review checks |
-| ApprovedPacket | Patient/visit IDs, immutable approved content and appointment snapshot, revision, approver/time |
-| PatientAccess | Approved packet/patient IDs, hashed random token, expiry, revocation, open time |
-| FollowUpSession | Patient/packet/access relationship, call/conversation provider IDs, call state, attempts, active website card |
-| ConversationEvent | Unique event ID, patient/session/packet IDs, action, original statement/language, timestamp, confirmation |
-| AssistanceRequest | Patient/session IDs, provenance, original quote if supplied, patient confirmation, staff status |
-| DeliveryAttempt | Access/session ID, SMS provider ID, destination, queued/sent/delivered/failed state |
+| Authentication, membership and patient assignment | `base44/shared/access.ts`, `doctorLoadPatients`, `doctorLoadPatient` |
+| Patient creation and edits | `doctorCreatePatient`, `doctorSaveContact`, `doctorSaveDraft` |
+| Review and immutable approval | `src/EducationReview.tsx`, `approvePacket`, `doctorGetPatientLink` |
+| Scoped patient access | `validatePatientLink`, `src/components/LivePatientView.tsx` |
+| Manual calls and provider requests | `startCall`, `startDemoCall`, `base44/shared/outboundCall.ts`, `agentVars.ts` |
+| Voice-driven website cards | `agentShowCard`, `getCallCard`, `src/components/patient/useCallCard.ts` |
+| Patient content and visuals | `src/components/patient/`, `src/ColonModel.tsx` |
+| Shared design tokens | `src/tokens.css`, `src/index.css` |
 
-Doctor sign-in must use Base44 authentication and server-enforced membership rules. Google sign-in identifies an account; it does not establish a doctor role. Do not store Google passwords in application records.
+Function sources are under `base44/functions/<name>/entry.ts`. The main records are CareTeamMembership, Patient, Visit, EducationDraft, ApprovedPacket, PatientLink, and DemoCall. Legacy `workflow.ts` domain tests describe earlier local rules; they do not prove the current provider integration works.
 
-Patients must never receive all patient records or doctor notes in the browser. Replace the local workspace read with a server-validated personal session that returns only the approved patient DTO. Configure private entity permissions; do not make the Patient, Visit, or ApprovedPacket entities public to enable anonymous links.
+Contact or appointment edits invalidate review checks and advance the draft revision. Approval preserves an independent snapshot; previously shared packet content does not silently change. Patient link validation checks token, expiry, revocation, and packet relationships. Personal call attempts use a conditional database reservation to avoid duplicate calls from simultaneous requests. The screen tool uses a per-call session ID and rejects a supplied conversation ID that conflicts with the stored call. Patient card polling runs during the call, approximately every three seconds.
 
-## Required backend operations
+## Server configuration
 
-These are proposed application contracts, not built-in provider method names:
+Configure these through the Base44 app's server secrets settings. Values must never appear in frontend code, documentation, commits, or screenshots.
 
-- `approveAndSend(patientId, visitId, draftRevision)`: authenticate the doctor, check assignment and exact draft revision, validate delivery details, save the immutable packet, mint access, queue SMS, and record delivery separately from approval. Reject duplicate submission/retry using an operation ID. Sending the same revision again must not approve changed content.
-- `exchangePatientAccess(token)`: validate an unguessable token against its stored hash, expiry/revocation, and packet relationship; return only a scoped patient session. Do not start a call on an HTTP GET or an SMS link-preview request.
-- `startFollowUp(sessionId, operationId)`: validate the scoped patient session, atomically claim a once-only start, and trigger ElevenLabs/Twilio after the actual page opens. Reopening/resuming the page must not repeat the call. The local synchronous rule is not sufficient for multiple servers or devices.
-- `receiveAgentEvent(event)`: authenticate the provider tool, bind the provider call/conversation to the correct patient session on the server, validate the action and packet, reject duplicate events, persist the event, and notify only that patient's authorized website connection.
-- `requestAssistance(sessionId, request, confirmation)`: validate patient access and explicit confirmation; record the real original statement or website-request provenance. Availability of a help request must not depend on a connected phone call.
-- `updateAssistanceStatus(requestId, status)`: authenticate assigned staff; update status. A closed review is not proof that a ride was booked.
-- `renewAccess` / `revokeAccess`: authorize assigned staff; rotating a token invalidates the previous one. Renewing access to the same session does not automatically restart a completed call.
-
-Keep API keys and privileged access server-side. Token validation must also protect any live subscription/polling endpoint. Test the supported Base44 method for a patient session without Google login before finalizing the delivery architecture.
-
-## Agent actions
-
-The local `ConversationEvent` contract is the prepared event structure:
-
-| Action | Website outcome |
+| Secret name | Purpose |
 | --- | --- |
-| `show_appointment` | Show the immutable saved appointment; do not change it |
-| `show_directions` | Show the route using the session origin and approved destination |
-| `show_education` | Show the approved packet in the selected language |
-| `show_help` | Show assistance choices |
-| `request_transportation` | Show the request card; create a staff request only after confirmation |
-| `end_call` | End call input and preserve approved information |
+| `ELEVENLABS_API_KEY` | Server access to the existing voice agent and call API |
+| `ELEVENLABS_AGENT_ID` | Existing VozCare agent identifier |
+| `TWILIO_FROM_NUMBER` | Connected calling number; server lookup resolves its ElevenLabs phone-number ID |
+| `VOZCARE_TESTER_NUMBER` | E.164 destination for the admin-only Team test call |
 
-The local typed router is a keyword simulator, not speech recognition or AI. ElevenLabs agent webhook tools should call the authenticated backend action endpoint during the Twilio phone conversation. Persist a scoped event and update the companion website through an authorized live channel. Post-call webhooks can update summaries/status but cannot substitute for in-call events. Do not rely on browser client tools executing inside a separate phone call.
+The agent's greeting, instructions, and turn-taking settings also live in ElevenLabs configuration. Base44 can update them through the configured integration. A Git commit does not by itself prove those provider settings changed. Keep the `show_patient_card` tool connected to this app's `agentShowCard` function and preserve its session variables. Do not restore the retired temporary tunnel URL.
 
-## Failure behavior prepared locally
+## Verification and limitations
 
-- Failed SMS has explicit failed status and a demo retry.
-- Unanswered call leaves care information available; explicit retry increments attempts.
-- Expired, invalid, or revoked links show no patient content.
-- A new link restores access to the approved packet while retaining the session.
-- Missing/invalid contact or appointment data blocks delivery approval.
-- Another starting address applies only to the route session, not the stored patient profile.
-- Editing approved content or saved appointment details invalidates draft approval; the previously shared packet remains unchanged. A new approval replaces access and starts a new session while preserving existing assistance requests. Store requests separately from sessions in Base44.
-- A storage failure is surfaced; the UI must not claim the packet was saved.
+Dennis confirmed completing a live test on October 11, 2026. Treat this as user-reported live verification; it is not evidence that all failure, permission, or concurrent-device cases were exercised. No new call was placed for this documentation update.
 
-## Port assets and verification
-
-Preserve the local fonts and OFL licenses, grandmother/clinician images, favicon, shared CSS tokens, and anatomy model attribution. Verify Three.js model loading and public asset URLs in the target Base44 environment. Retain the current English education-controls notice while localizing the delivered packet.
-
-Run the pure domain checks with Node 24:
+Run local checks with Node.js 24:
 
 ```sh
-node --experimental-strip-types --test tests/workflow.test.ts
+npm ci
 npx tsc --noEmit
+node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs
 npm run build
 ```
 
-After connection, test two doctor accounts with separate patient assignments, two patients on separate devices, expired/revoked links, duplicate page opens, duplicate provider callbacks, call failure/retry, actual SMS delivery, and a live spoken request opening the right card. Local verification is not proof that these provider or access-control boundaries work in Base44.
+The regression checks use in-memory entities. After future integration changes, verify the spoken appointment, calendar, directions, patient visual, and Full details agree with the same approved packet. Also check the relevant failure paths: expired links, limits, concurrent call requests, denied location permission, and provider failure. Coordinate before placing billable calls.
 
-Do not export browser storage, verification backups, or unrelated private documentation as application source.
+Known limits: SMS is not configured; doctor transcripts, teach-back results, and assistance queues are not implemented. Google Maps depends on resolvable addresses and browser/network behavior. Account ownership and billing responsibility must be confirmed with the team. Production healthcare use is outside this demo's scope.
+
+## Troubleshooting
+
+- **Public site looks old:** verify GitHub sync, publish, and reload the public site.
+- **Call does not start:** check the displayed error, link expiry/attempt count, valid US number, server secrets, connected calling number, and provider logs.
+- **Call speaks but the card stays unchanged:** inspect `show_patient_card` tool delivery, app endpoint, per-call session variable, and `agentShowCard`/`getCallCard` logs.
+- **Wrong patient information:** compare the approved packet with the draft and verify the selected link. Reapprove edited content rather than assuming an old link changed.
+- **Map is incorrect:** check origin and hospital addresses; use the external Google Maps link and the example-route notice where applicable.
+
+Preserve fonts and licenses, photos, favicon, design tokens, anatomy assets and attribution. Private design notes, credentials, browser storage, and review screenshots stay outside Git. The separate launch video is unchanged.

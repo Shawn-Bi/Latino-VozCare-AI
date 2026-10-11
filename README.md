@@ -1,10 +1,10 @@
 # VozCare AI
 
-Reviewed React frontend for a synthetic-data care follow-up prototype.
+Fictional-data care follow-up demo with a React frontend, Base44 backend, and live ElevenLabs/Twilio calls.
 
 - Hosted prototype: https://vozcare.base44.app
 - Base44 dashboard: https://app.base44.com/apps/6aca7bb397b1030686eef3a2/editor/workspace/overview
-- Implementation and backend contracts: [Base44 handoff](docs/BASE44_HANDOFF.md)
+- Current implementation and operations: [Base44 handoff](docs/BASE44_HANDOFF.md)
 - Earlier team planning documents: [PRD v2](VozCare_PRD_v2_EN.md) and [README v2](VozCare_README_v2_EN.md). These documents are preserved; their delivery flow and integration status differ from the current frontend described below.
 
 ## Current status
@@ -25,7 +25,7 @@ node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs
 npm run build
 ```
 
-The backend regression checks use in-memory entities and never place calls. A live retest after sync must confirm the reviewed words, appointment, directions, education card and Full details all use the same packet. Stop before placing a live call until the tester is ready. The launch video is maintained separately under the event’s video folder; confirm its render matches this release before sharing.
+The backend regression checks use in-memory entities and never place calls. Dennis confirmed completing a live test on October 11, 2026. This is user-reported verification, not a new agent-run call or proof that every failure case was tested. Repeat the relevant live checks after future voice or integration changes, with the tester ready. The launch video is a separate asset; no video update is part of this documentation closeout.
 
 ## Local development
 
@@ -50,8 +50,12 @@ The default branch must be `main`, and `base44/config.jsonc` must name the app `
 
 After linking, GitHub becomes the source of truth. Continue through the Base44 editor and its GitHub sync; stop using direct CLI deployment for this app. Base44 lists GitHub two-way sync as requiring the Builder plan or higher.
 
-Private design notes, credentials, environment files, browser storage, and verification screenshots are excluded from this repository. Keep provider credentials server-side when implementing the backend.
+Private design notes, credentials, environment files, browser storage, and verification screenshots are excluded from this repository. Provider credentials are configured as Base44 server secrets; never put their values in this repository.
 
 ## Assets
 
 Preserve the shared design tokens, Source Serif 4 and Source Sans 3 fonts and their licenses, both photos, and the anatomy assets. See [anatomy attribution](public/models/ATTRIBUTION.md).
+
+## Patient experience
+
+Appointment cards show a calendar with the saved date highlighted. Directions use Google Maps with the saved origin and hospital, or the device location after the patient requests it and grants permission. Fictional addresses carry an example-route notice. The patient visual uses a simplified anatomy presentation, separate from doctor editing controls; it does not establish tumor size, depth, or stage. Conversation and Full details remain separate tabs. Call setup is hidden during an active call and returns after it ends.
