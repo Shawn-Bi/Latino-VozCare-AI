@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@base44/sdk": "^0.8.54",
-    "@base44/vite-plugin": "^1.0.46",
+    "@base44/vite-plugin": "^1.0.47",
     "lucide-react": "^0.460.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
